@@ -2,7 +2,7 @@
 
 import { useActionState, useMemo, useState } from "react";
 import { logTradeAction } from "./actions";
-import { ALLOWED_LEVERAGES } from "@/lib/position";
+import { ALLOWED_LEVERAGES } from "@/lib/leverage-options";
 
 function computePreview(
   entryPrice: string,

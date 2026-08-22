@@ -3,7 +3,7 @@ import { d, type Decimalish } from "./nav";
 
 export type TradeDirection = "LONG" | "SHORT";
 
-export const ALLOWED_LEVERAGES = [1, 2, 3, 5, 10, 20] as const;
+export { ALLOWED_LEVERAGES } from "./leverage-options"; // ré-exporté pour l'usage côté serveur (actions.ts)
 
 /**
  * Calcule le résultat en % de l'AUM total d'une position, à partir d'un prix

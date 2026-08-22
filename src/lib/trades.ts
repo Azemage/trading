@@ -58,6 +58,7 @@ export async function logManualTrade(params: {
         pnlPct: params.pnlPct,
         navBefore: result.navBefore,
         navAfter: result.navAfterNet,
+        totalPartsAtTrade: pool.totalParts,
         note: params.note,
         loggedById: params.loggedById,
         pair: params.position?.pair,

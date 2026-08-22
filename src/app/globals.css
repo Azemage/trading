@@ -9,6 +9,7 @@
   --green: #34d399;
   --gold: #d4af37;
   --red: #f16565;
+  --blue: #5b9dd9;
 }
 
 @theme inline {
@@ -20,6 +21,7 @@
   --color-green: var(--green);
   --color-gold: var(--gold);
   --color-red: var(--red);
+  --color-blue: var(--blue);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

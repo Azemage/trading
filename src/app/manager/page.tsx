@@ -13,6 +13,7 @@ import {
 import { TradeForm } from "./trade-form";
 import { PoolAdjustForm } from "./pool-adjust-form";
 import { CreateTestClientForm } from "./create-test-client-form";
+import { buildManagerLedger } from "@/lib/ledger";
 
 function fmt(n: number) {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " $";
@@ -23,7 +24,7 @@ export default async function ManagerView() {
   if (!session?.user) redirect("/login");
   if (session.user.role !== "MANAGER") redirect("/client");
 
-  const [pool, pendingDeposits, pendingWithdrawals, feeAgg, holdings] = await Promise.all([
+  const [pool, pendingDeposits, pendingWithdrawals, feeAgg, holdings, ledger] = await Promise.all([
     prisma.poolState.findUnique({ where: { id: 1 } }),
     prisma.pendingMovement.findMany({
       where: { type: "DEPOSIT", status: "PENDING_CONFIRMATION" },
@@ -40,6 +41,7 @@ export default async function ManagerView() {
       where: { parts: { gt: 0 } },
       include: { client: { select: { name: true, email: true } } },
     }),
+    buildManagerLedger(100),
   ]);
 
   const totalAssets = pool?.totalAssets.toNumber() ?? 0;
@@ -190,6 +192,71 @@ export default async function ManagerView() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="card">
+        <div className="label-mono mb-3">Fiche de calcul — entrées, trades &amp; revenus de perf</div>
+        {ledger.length === 0 ? (
+          <div className="text-muted text-sm">Aucun mouvement enregistré pour l&apos;instant.</div>
+        ) : (
+          <div className="max-h-96 overflow-y-auto">
+            <table className="w-full text-xs font-mono border-collapse">
+              <thead>
+                <tr className="text-muted">
+                  <th className="text-left p-1.5">Date</th>
+                  <th className="text-left p-1.5">Type</th>
+                  <th className="text-left p-1.5">Détail</th>
+                  <th className="text-right p-1.5">Montant</th>
+                  <th className="text-right p-1.5">Frais perf.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ledger.map((e, i) => {
+                  if (e.kind === "DEPOSIT") {
+                    return (
+                      <tr key={i} className="border-t border-line">
+                        <td className="p-1.5 text-muted">{e.date.toLocaleString("fr-FR")}</td>
+                        <td className="p-1.5 text-blue">Dépôt</td>
+                        <td className="p-1.5">{e.clientName}</td>
+                        <td className="p-1.5 text-right text-green">+{fmt(e.amount)}</td>
+                        <td className="p-1.5 text-right text-muted">—</td>
+                      </tr>
+                    );
+                  }
+                  if (e.kind === "WITHDRAWAL") {
+                    return (
+                      <tr key={i} className="border-t border-line">
+                        <td className="p-1.5 text-muted">{e.date.toLocaleString("fr-FR")}</td>
+                        <td className="p-1.5 text-gold">Retrait</td>
+                        <td className="p-1.5">{e.clientName}</td>
+                        <td className="p-1.5 text-right text-red">-{fmt(e.amount)}</td>
+                        <td className="p-1.5 text-right text-muted">—</td>
+                      </tr>
+                    );
+                  }
+                  return (
+                    <tr key={i} className="border-t border-line">
+                      <td className="p-1.5 text-muted">{e.date.toLocaleString("fr-FR")}</td>
+                      <td className="p-1.5">Trade</td>
+                      <td className="p-1.5 text-muted">
+                        {e.pair ?? e.note ?? "—"}{" "}
+                        <span className={e.pnlPct >= 0 ? "text-green" : "text-red"}>
+                          ({e.pnlPct >= 0 ? "+" : ""}
+                          {e.pnlPct.toFixed(2)}%)
+                        </span>
+                      </td>
+                      <td className={`p-1.5 text-right ${e.gainUsd >= 0 ? "text-green" : "text-red"}`}>
+                        {e.gainUsd >= 0 ? "+" : ""}
+                        {fmt(e.gainUsd)}
+                      </td>
+                      <td className="p-1.5 text-right text-gold">{e.fee > 0 ? fmt(e.fee) : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

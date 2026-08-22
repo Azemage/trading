@@ -102,6 +102,7 @@ model Trade {
   pnlPct      Decimal     @db.Decimal(12, 6) // % de l'AUM total, ex: 5.25 = +5.25% — toujours renseigné, calculé ou saisi directement
   navBefore   Decimal     @db.Decimal(24, 8)
   navAfter    Decimal     @db.Decimal(24, 8)
+  totalPartsAtTrade Decimal @db.Decimal(24, 8) // total_parts du pool au moment du trade (constant sur un trade) — permet de reconstituer le $ gagné/perdu
   note        String?
   timestamp   DateTime    @default(now())
   loggedById  String

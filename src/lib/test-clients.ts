@@ -66,6 +66,25 @@ export async function createTestClient(params: {
           reason: "TEST_CLIENT_SEED",
         },
       });
+
+      // Enregistrement d'un mouvement "complété" pour que ce dépôt de test
+      // apparaisse comme n'importe quel autre dans l'historique du client et
+      // la fiche de calcul du gestionnaire (même s'il a été crédité
+      // directement, sans passer par le workflow d'attente).
+      const now = new Date();
+      await tx.pendingMovement.create({
+        data: {
+          clientId: client.id,
+          type: "DEPOSIT",
+          amount: params.initialDeposit,
+          navAtRequest: nav,
+          status: "COMPLETED",
+          requestedAt: now,
+          eligibleAt: now,
+          processedAt: now,
+          processedById: params.managerId,
+        },
+      });
     }
 
     await tx.auditLog.create({

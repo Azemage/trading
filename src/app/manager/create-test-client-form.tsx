@@ -35,6 +35,11 @@ export function CreateTestClientForm() {
       {state.created && (
         <div className="text-green text-xs w-full">
           Client créé — connexion : {state.created.email} / {state.created.password}
+          {" — "}
+          <a href={`/login?email=${encodeURIComponent(state.created.email)}`} className="underline">
+            page de connexion (email pré-rempli)
+          </a>
+          <span className="text-muted"> — te déconnectera de ta session gestionnaire actuelle</span>
         </div>
       )}
     </form>

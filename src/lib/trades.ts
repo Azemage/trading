@@ -1,8 +1,8 @@
 import { Decimal } from "@prisma/client/runtime/library";
-import { FeeType, Prisma, Role, TradeSource } from "@prisma/client";
+import { FeeType, Prisma, Role, TradeDirection, TradeSource } from "@prisma/client";
 import { prisma } from "./prisma";
 import { applyTradeResult } from "./fees";
-import { d } from "./nav";
+import { computeNav, d } from "./nav";
 
 class TradeError extends Error {}
 
@@ -14,11 +14,21 @@ async function lockPoolState(tx: Prisma.TransactionClient) {
   return rows[0];
 }
 
-/** Saisie manuelle par le gestionnaire d'un résultat de trading (% de l'AUM). */
+/** Saisie manuelle par le gestionnaire d'un résultat de trading (% de l'AUM).
+ * `position` est optionnel : renseigné uniquement quand le trade est saisi par
+ * paire (prix d'entrée/sortie) plutôt qu'en % direct — conservé pour la
+ * traçabilité du registre, n'affecte pas le calcul (déjà fait dans pnlPct). */
 export async function logManualTrade(params: {
   pnlPct: Decimal;
   note?: string;
   loggedById: string;
+  position?: {
+    pair: string;
+    direction: TradeDirection;
+    entryPrice: Decimal;
+    exitPrice: Decimal;
+    positionSizePct: Decimal;
+  };
 }) {
   return prisma.$transaction(async (tx) => {
     const pool = await lockPoolState(tx);
@@ -49,6 +59,11 @@ export async function logManualTrade(params: {
         navAfter: result.navAfterNet,
         note: params.note,
         loggedById: params.loggedById,
+        pair: params.position?.pair,
+        direction: params.position?.direction,
+        entryPrice: params.position?.entryPrice,
+        exitPrice: params.position?.exitPrice,
+        positionSizePct: params.position?.positionSizePct,
       },
     });
 
@@ -83,6 +98,66 @@ export async function logManualTrade(params: {
     });
 
     return trade;
+  });
+}
+
+/**
+ * Outil de test/correction : impose directement une nouvelle valeur d'AUM
+ * total (donc un nouveau NAV, à parts constantes), sans passer par un trade.
+ * Ne prélève AUCUN frais et ne touche PAS le high-water mark — ce n'est pas
+ * un gain de trading réel, juste un ajustement (ex: correction comptable,
+ * mise en place d'un scénario de test). Motif obligatoire, tracé en audit.
+ */
+export async function adjustPoolAssets(params: {
+  newTotalAssets: Decimal;
+  reason: string;
+  managerId: string;
+}) {
+  if (params.newTotalAssets.lessThan(0)) {
+    throw new TradeError("L'AUM ne peut pas être négatif");
+  }
+  if (!params.reason.trim()) {
+    throw new TradeError("Un motif est requis pour ajuster le pool manuellement");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const pool = await lockPoolState(tx);
+    const navBefore = computeNav(pool.totalAssets, pool.totalParts);
+
+    await tx.poolState.update({
+      where: { id: 1 },
+      data: { totalAssets: params.newTotalAssets },
+    });
+
+    const navAfter = computeNav(params.newTotalAssets, pool.totalParts);
+
+    await tx.navSnapshot.create({
+      data: {
+        nav: navAfter,
+        totalAssets: params.newTotalAssets,
+        totalParts: pool.totalParts,
+        reason: "MANUAL_ADJUSTMENT",
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorId: params.managerId,
+        actorRole: Role.MANAGER,
+        action: "pool.manual_adjustment",
+        entityType: "PoolState",
+        entityId: "1",
+        details: {
+          reason: params.reason,
+          totalAssetsBefore: pool.totalAssets.toString(),
+          totalAssetsAfter: params.newTotalAssets.toString(),
+          navBefore: navBefore.toString(),
+          navAfter: navAfter.toString(),
+        },
+      },
+    });
+
+    return { navBefore, navAfter };
   });
 }
 

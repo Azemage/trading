@@ -11,6 +11,7 @@ import {
   sendWithdrawalAction,
 } from "./actions";
 import { TradeForm } from "./trade-form";
+import { PoolAdjustForm } from "./pool-adjust-form";
 
 function fmt(n: number) {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " $";
@@ -73,6 +74,16 @@ export default async function ManagerView() {
         <TradeForm />
         <div className="text-xs text-muted mt-2">
           Performance fee de 30% prélevée sur les gains au-dessus du high-water mark, aucun frais sinon.
+        </div>
+      </div>
+
+      <div className="card border-red">
+        <div className="label-mono text-red mb-3">🧪 Ajustement manuel de l&apos;AUM (outil de test)</div>
+        <PoolAdjustForm currentTotalAssets={totalAssets} />
+        <div className="text-xs text-muted mt-2">
+          Impose directement un AUM (donc un NAV) pour tester des scénarios. Aucun frais prélevé, ne modifie pas le
+          high-water mark. À ne pas utiliser en production réelle — chaque usage est tracé dans le journal d&apos;audit
+          avec le motif saisi.
         </div>
       </div>
 

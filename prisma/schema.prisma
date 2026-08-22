@@ -44,6 +44,11 @@ enum TradeSource {
   API_SYNC
 }
 
+enum TradeDirection {
+  LONG
+  SHORT
+}
+
 enum FeeType {
   MANAGEMENT
   PERFORMANCE
@@ -94,13 +99,22 @@ model ClientHolding {
 model Trade {
   id          String      @id @default(uuid())
   source      TradeSource @default(MANUAL)
-  pnlPct      Decimal     @db.Decimal(12, 6) // ex: 5.25 = +5.25% de l'AUM
+  pnlPct      Decimal     @db.Decimal(12, 6) // % de l'AUM total, ex: 5.25 = +5.25% — toujours renseigné, calculé ou saisi directement
   navBefore   Decimal     @db.Decimal(24, 8)
   navAfter    Decimal     @db.Decimal(24, 8)
   note        String?
   timestamp   DateTime    @default(now())
   loggedById  String
   loggedBy    User        @relation("TradeLoggedBy", fields: [loggedById], references: [id])
+
+  // Détail optionnel quand le trade est saisi par paire (plutôt qu'en % direct) —
+  // conservé pour la traçabilité du registre de trades, pnlPct reste la seule
+  // valeur utilisée par le moteur de calcul du NAV/frais.
+  pair            String?
+  direction       TradeDirection?
+  entryPrice      Decimal?        @db.Decimal(24, 8)
+  exitPrice       Decimal?        @db.Decimal(24, 8)
+  positionSizePct Decimal?        @db.Decimal(7, 4) // % de l'AUM misé sur cette paire
 
   feeLedgerEntries FeeLedger[]
 

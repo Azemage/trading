@@ -9,7 +9,9 @@ import {
   rejectDeposit,
   rejectWithdrawal,
 } from "@/lib/movements";
-import { logManualTrade, resetGatePeriod } from "@/lib/trades";
+import { adjustPoolAssets, logManualTrade, resetGatePeriod } from "@/lib/trades";
+import { computePositionPnlPct } from "@/lib/position";
+import type { TradeDirection } from "@prisma/client";
 
 async function requireManager() {
   const session = await auth();
@@ -52,11 +54,74 @@ export async function logTradeAction(
 ): Promise<{ error: string | null }> {
   try {
     const manager = await requireManager();
-    const pnlPct = Number(formData.get("pnlPct"));
     const note = String(formData.get("note") ?? "");
-    if (Number.isNaN(pnlPct)) return { error: "Résultat invalide" };
+    const mode = String(formData.get("mode") ?? "simple");
 
-    await logManualTrade({ pnlPct: new Decimal(pnlPct), note: note || undefined, loggedById: manager.id });
+    if (mode === "position") {
+      const pair = String(formData.get("pair") ?? "").trim();
+      const direction = String(formData.get("direction") ?? "LONG") as TradeDirection;
+      const entryPrice = Number(formData.get("entryPrice"));
+      const exitPrice = Number(formData.get("exitPrice"));
+      const positionSizePct = Number(formData.get("positionSizePct"));
+
+      if (!pair) return { error: "Paire requise" };
+      if ([entryPrice, exitPrice, positionSizePct].some((n) => Number.isNaN(n))) {
+        return { error: "Prix d'entrée, prix de sortie et taille de position doivent être numériques" };
+      }
+      if (positionSizePct <= 0 || positionSizePct > 100) {
+        return { error: "La taille de position doit être comprise entre 0 et 100% de l'AUM" };
+      }
+
+      const entryPriceD = new Decimal(entryPrice);
+      const exitPriceD = new Decimal(exitPrice);
+      const { pnlPctOfAum } = computePositionPnlPct({
+        entryPrice: entryPriceD,
+        exitPrice: exitPriceD,
+        positionSizePct: new Decimal(positionSizePct),
+        direction,
+      });
+
+      await logManualTrade({
+        pnlPct: pnlPctOfAum,
+        note: note || undefined,
+        loggedById: manager.id,
+        position: {
+          pair,
+          direction,
+          entryPrice: entryPriceD,
+          exitPrice: exitPriceD,
+          positionSizePct: new Decimal(positionSizePct),
+        },
+      });
+    } else {
+      const pnlPct = Number(formData.get("pnlPct"));
+      if (Number.isNaN(pnlPct)) return { error: "Résultat invalide" };
+      await logManualTrade({ pnlPct: new Decimal(pnlPct), note: note || undefined, loggedById: manager.id });
+    }
+
+    revalidatePath("/manager");
+    revalidatePath("/");
+    return { error: null };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erreur inconnue" };
+  }
+}
+
+export async function adjustPoolAction(
+  _prevState: { error: string | null },
+  formData: FormData
+): Promise<{ error: string | null }> {
+  try {
+    const manager = await requireManager();
+    const newTotalAssets = Number(formData.get("newTotalAssets"));
+    const reason = String(formData.get("reason") ?? "");
+    if (Number.isNaN(newTotalAssets)) return { error: "Montant invalide" };
+
+    await adjustPoolAssets({
+      newTotalAssets: new Decimal(newTotalAssets),
+      reason,
+      managerId: manager.id,
+    });
     revalidatePath("/manager");
     revalidatePath("/");
     return { error: null };

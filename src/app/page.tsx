@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { computeNav } from "@/lib/nav";
 import { NavChart } from "./nav-chart";
+import { AumChart } from "./aum-chart";
 
 function fmt(n: number) {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " $";
@@ -46,8 +47,24 @@ export default async function GlobalView() {
       </div>
 
       <div className="card">
-        <div className="label-mono mb-3">Évolution du NAV</div>
+        <div className="label-mono mb-3">Évolution de l&apos;AUM</div>
+        <AumChart
+          data={navHistory.map((n) => ({ totalAssets: n.totalAssets.toNumber(), reason: n.reason }))}
+        />
+        <div className="text-xs text-muted mt-3">
+          Montant total géré par le pool. Les points colorés indiquent un dépôt, un retrait, ou un ajustement de
+          test — pas une performance de trading, pour ne pas les confondre avec un gain/une perte.
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="label-mono mb-3">Évolution du NAV / part</div>
         <NavChart data={navHistory.map((n) => ({ createdAt: n.createdAt.toISOString(), nav: n.nav.toNumber() }))} />
+        <div className="text-xs text-muted mt-3">
+          Valeur d&apos;une part du pool (AUM ÷ nombre de parts) — c&apos;est la mesure de la performance de trading
+          pure. Un dépôt ou un retrait ne le fait jamais varier (les parts échangées sont calculées exactement à ce
+          NAV) : seul un trade gagnant ou perdant peut le faire monter ou descendre.
+        </div>
       </div>
 
       <div className="card">

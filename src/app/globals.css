@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0a0d12;
+  --foreground: #e7e9ee;
+  --panel: #12161f;
+  --line: #232a38;
+  --muted: #8b95a5;
+  --green: #34d399;
+  --gold: #d4af37;
+  --red: #f16565;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-panel: var(--panel);
+  --color-line: var(--line);
+  --color-muted: var(--muted);
+  --color-green: var(--green);
+  --color-gold: var(--gold);
+  --color-red: var(--red);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+input, select {
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.btn {
+  background: transparent;
+  border: 1px solid var(--green);
+  color: var(--green);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: var(--font-mono), monospace;
+}
+.btn:hover { background: rgba(52, 211, 153, 0.1); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-red { border-color: var(--red); color: var(--red); }
+.btn-red:hover { background: rgba(241, 101, 101, 0.1); }
+.btn-gold { border-color: var(--gold); color: var(--gold); }
+.btn-gold:hover { background: rgba(212, 175, 55, 0.1); }
+
+.label-mono {
+  font-family: var(--font-mono), monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-transform: uppercase;
+}

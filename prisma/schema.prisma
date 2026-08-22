@@ -1,0 +1,167 @@
+// Ledger Capital — schéma de données
+// Voir README.md pour le rappel de sécurité sur toute modification touchant
+// au NAV, aux frais ou aux mouvements de fonds.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CLIENT
+  MANAGER
+}
+
+enum Tier {
+  STANDARD
+  PREMIUM
+}
+
+enum KycStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum MovementType {
+  DEPOSIT
+  WITHDRAWAL
+}
+
+enum MovementStatus {
+  PENDING_CONFIRMATION // dépôt : en attente de validation manuelle du gestionnaire
+  PENDING_EXECUTION    // retrait : parts déjà déduites, envoi on-chain pas encore effectué
+  COMPLETED
+  REJECTED
+}
+
+enum TradeSource {
+  MANUAL
+  API_SYNC
+}
+
+enum FeeType {
+  MANAGEMENT
+  PERFORMANCE
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         Role      @default(CLIENT)
+  tier         Tier      @default(STANDARD)
+  kycStatus    KycStatus @default(PENDING)
+  createdAt    DateTime  @default(now())
+
+  holding           ClientHolding?
+  pendingMovements  PendingMovement[] @relation("ClientMovements")
+  processedMovements PendingMovement[] @relation("ProcessedByManager")
+  trades            Trade[]           @relation("TradeLoggedBy")
+  auditLogs         AuditLog[]
+
+  @@map("users")
+}
+
+// Singleton (une seule ligne) : état courant du pool commun.
+model PoolState {
+  id                  Int      @id @default(1)
+  totalAssets         Decimal  @default(0) @db.Decimal(24, 8)
+  totalParts          Decimal  @default(0) @db.Decimal(24, 8)
+  cashBuffer          Decimal  @default(0) @db.Decimal(24, 8)
+  gateUsedThisPeriod  Decimal  @default(0) @db.Decimal(24, 8)
+  gatePeriodStart     DateTime @default(now())
+  highWaterMark       Decimal  @default(1) @db.Decimal(24, 8)
+  updatedAt           DateTime @updatedAt
+
+  @@map("pool_state")
+}
+
+model ClientHolding {
+  id       String  @id @default(uuid())
+  clientId String  @unique
+  client   User    @relation(fields: [clientId], references: [id])
+  parts    Decimal @default(0) @db.Decimal(24, 8)
+
+  @@map("client_holdings")
+}
+
+model Trade {
+  id          String      @id @default(uuid())
+  source      TradeSource @default(MANUAL)
+  pnlPct      Decimal     @db.Decimal(12, 6) // ex: 5.25 = +5.25% de l'AUM
+  navBefore   Decimal     @db.Decimal(24, 8)
+  navAfter    Decimal     @db.Decimal(24, 8)
+  note        String?
+  timestamp   DateTime    @default(now())
+  loggedById  String
+  loggedBy    User        @relation("TradeLoggedBy", fields: [loggedById], references: [id])
+
+  feeLedgerEntries FeeLedger[]
+
+  @@map("trades")
+}
+
+model FeeLedger {
+  id      String   @id @default(uuid())
+  type    FeeType
+  amount  Decimal  @db.Decimal(24, 8)
+  date    DateTime @default(now())
+  tradeId String?
+  trade   Trade?   @relation(fields: [tradeId], references: [id])
+
+  @@map("fee_ledger")
+}
+
+model PendingMovement {
+  id              String         @id @default(uuid())
+  clientId        String
+  client          User           @relation("ClientMovements", fields: [clientId], references: [id])
+  type            MovementType
+  amount          Decimal        @db.Decimal(24, 8) // montant demandé
+  grantedAmount   Decimal?       @db.Decimal(24, 8) // retrait : part accordée immédiatement (soumise au gate)
+  deferredAmount  Decimal?       @db.Decimal(24, 8) // retrait : part différée au prochain cycle de gate
+  status          MovementStatus @default(PENDING_CONFIRMATION)
+  navAtRequest    Decimal        @db.Decimal(24, 8) // NAV figé au moment de la demande — jamais recalculé à l'approbation
+  requestedAt     DateTime       @default(now())
+  eligibleAt      DateTime       // requestedAt + délai de traitement (12-24h) avant action gestionnaire possible
+  processedAt     DateTime?
+  processedById   String?
+  processedBy     User?          @relation("ProcessedByManager", fields: [processedById], references: [id])
+  txHash          String?        // preuve on-chain une fois le retrait envoyé
+  rejectionReason String?
+
+  @@map("pending_movements")
+}
+
+// Historique du NAV pour le graphique de la vue globale.
+model NavSnapshot {
+  id          String   @id @default(uuid())
+  nav         Decimal  @db.Decimal(24, 8)
+  totalAssets Decimal  @db.Decimal(24, 8)
+  totalParts  Decimal  @db.Decimal(24, 8)
+  reason      String   // INIT | TRADE | DEPOSIT | WITHDRAWAL
+  createdAt   DateTime @default(now())
+
+  @@map("nav_snapshots")
+}
+
+// Journal d'audit — écriture seule, jamais de update/delete dans le code applicatif.
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  actorRole  Role?
+  action     String
+  entityType String
+  entityId   String?
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  @@map("audit_log")
+}

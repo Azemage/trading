@@ -12,6 +12,7 @@ import {
 } from "./actions";
 import { TradeForm } from "./trade-form";
 import { PoolAdjustForm } from "./pool-adjust-form";
+import { CreateTestClientForm } from "./create-test-client-form";
 
 function fmt(n: number) {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " $";
@@ -77,13 +78,27 @@ export default async function ManagerView() {
         </div>
       </div>
 
-      <div className="card border-red">
-        <div className="label-mono text-red mb-3">🧪 Ajustement manuel de l&apos;AUM (outil de test)</div>
-        <PoolAdjustForm currentTotalAssets={totalAssets} />
-        <div className="text-xs text-muted mt-2">
-          Impose directement un AUM (donc un NAV) pour tester des scénarios. Aucun frais prélevé, ne modifie pas le
-          high-water mark. À ne pas utiliser en production réelle — chaque usage est tracé dans le journal d&apos;audit
-          avec le motif saisi.
+      <div className="card border-red space-y-4">
+        <div className="label-mono text-red">🧪 Outils de test</div>
+
+        <div>
+          <div className="text-xs text-gold mb-2">Créer un client de test</div>
+          <CreateTestClientForm />
+          <div className="text-xs text-muted mt-2">
+            Crée un compte client et le crédite immédiatement d&apos;un dépôt initial (sans passer par le workflow
+            d&apos;attente), pour observer le solde/les parts selon différents montants. N&apos;affecte pas le NAV
+            (actifs et parts ajoutés proportionnellement, comme un vrai dépôt).
+          </div>
+        </div>
+
+        <div className="border-t border-line pt-4">
+          <div className="text-xs text-gold mb-2">Ajustement manuel de l&apos;AUM</div>
+          <PoolAdjustForm currentTotalAssets={totalAssets} />
+          <div className="text-xs text-muted mt-2">
+            Impose directement un AUM (donc un NAV) pour tester des scénarios. Aucun frais prélevé, ne modifie pas le
+            high-water mark. À ne pas utiliser en production réelle — chaque usage est tracé dans le journal
+            d&apos;audit avec le motif saisi.
+          </div>
         </div>
       </div>
 

@@ -10,7 +10,8 @@ import {
   rejectWithdrawal,
 } from "@/lib/movements";
 import { adjustPoolAssets, logManualTrade, resetGatePeriod } from "@/lib/trades";
-import { computePositionPnlPct } from "@/lib/position";
+import { ALLOWED_LEVERAGES, computePositionPnlPct } from "@/lib/position";
+import { createTestClient } from "@/lib/test-clients";
 import type { TradeDirection } from "@prisma/client";
 
 async function requireManager() {
@@ -71,14 +72,20 @@ export async function logTradeAction(
       if (positionSizePct <= 0 || positionSizePct > 100) {
         return { error: "La taille de position doit être comprise entre 0 et 100% de l'AUM" };
       }
+      const leverage = Number(formData.get("leverage") ?? "1");
+      if (!ALLOWED_LEVERAGES.includes(leverage as (typeof ALLOWED_LEVERAGES)[number])) {
+        return { error: "Levier invalide" };
+      }
 
       const entryPriceD = new Decimal(entryPrice);
       const exitPriceD = new Decimal(exitPrice);
+      const leverageD = new Decimal(leverage);
       const { pnlPctOfAum } = computePositionPnlPct({
         entryPrice: entryPriceD,
         exitPrice: exitPriceD,
         positionSizePct: new Decimal(positionSizePct),
         direction,
+        leverage: leverageD,
       });
 
       await logManualTrade({
@@ -91,6 +98,7 @@ export async function logTradeAction(
           entryPrice: entryPriceD,
           exitPrice: exitPriceD,
           positionSizePct: new Decimal(positionSizePct),
+          leverage: leverageD,
         },
       });
     } else {
@@ -127,6 +135,40 @@ export async function adjustPoolAction(
     return { error: null };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Erreur inconnue" };
+  }
+}
+
+export async function createTestClientAction(
+  _prevState: { error: string | null; created: { email: string; password: string } | null },
+  formData: FormData
+): Promise<{ error: string | null; created: { email: string; password: string } | null }> {
+  try {
+    const manager = await requireManager();
+    const name = String(formData.get("name") ?? "").trim();
+    const email = String(formData.get("email") ?? "").trim();
+    const password = String(formData.get("password") ?? "");
+    const initialDeposit = Number(formData.get("initialDeposit"));
+
+    if (!name) return { error: "Nom requis", created: null };
+    if (!email) return { error: "Email requis", created: null };
+    if (password.length < 8) return { error: "Mot de passe : 8 caractères minimum", created: null };
+    if (Number.isNaN(initialDeposit) || initialDeposit < 0) {
+      return { error: "Dépôt initial invalide", created: null };
+    }
+
+    await createTestClient({
+      name,
+      email,
+      password,
+      initialDeposit: new Decimal(initialDeposit),
+      managerId: manager.id,
+    });
+
+    revalidatePath("/manager");
+    revalidatePath("/");
+    return { error: null, created: { email: email.toLowerCase(), password } };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erreur inconnue", created: null };
   }
 }
 

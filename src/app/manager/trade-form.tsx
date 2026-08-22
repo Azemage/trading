@@ -2,12 +2,14 @@
 
 import { useActionState, useMemo, useState } from "react";
 import { logTradeAction } from "./actions";
+import { ALLOWED_LEVERAGES } from "@/lib/position";
 
 function computePreview(
   entryPrice: string,
   exitPrice: string,
   positionSizePct: string,
-  direction: "LONG" | "SHORT"
+  direction: "LONG" | "SHORT",
+  leverage: number
 ) {
   const entry = parseFloat(entryPrice);
   const exit = parseFloat(exitPrice);
@@ -16,8 +18,9 @@ function computePreview(
 
   const rawChangePct = ((exit - entry) / entry) * 100;
   const priceChangePct = direction === "SHORT" ? -rawChangePct : rawChangePct;
-  const pnlPctOfAum = (priceChangePct * size) / 100;
-  return { priceChangePct, pnlPctOfAum };
+  const marginReturnPct = Math.max(priceChangePct * leverage, -100);
+  const pnlPctOfAum = (marginReturnPct * size) / 100;
+  return { priceChangePct, marginReturnPct, pnlPctOfAum };
 }
 
 export function TradeForm() {
@@ -27,10 +30,11 @@ export function TradeForm() {
   const [exitPrice, setExitPrice] = useState("");
   const [positionSizePct, setPositionSizePct] = useState("");
   const [direction, setDirection] = useState<"LONG" | "SHORT">("LONG");
+  const [leverage, setLeverage] = useState<number>(1);
 
   const preview = useMemo(
-    () => computePreview(entryPrice, exitPrice, positionSizePct, direction),
-    [entryPrice, exitPrice, positionSizePct, direction]
+    () => computePreview(entryPrice, exitPrice, positionSizePct, direction, leverage),
+    [entryPrice, exitPrice, positionSizePct, direction, leverage]
   );
 
   return (
@@ -109,6 +113,21 @@ export function TradeForm() {
               onChange={(e) => setPositionSizePct(e.target.value)}
             />
           </div>
+          <div>
+            <div className="text-xs text-muted mb-1">Levier</div>
+            <select
+              name="leverage"
+              value={leverage}
+              onChange={(e) => setLeverage(Number(e.target.value))}
+              className="w-20"
+            >
+              {ALLOWED_LEVERAGES.map((lv) => (
+                <option key={lv} value={lv}>
+                  x{lv}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="flex-1 min-w-40">
             <div className="text-xs text-muted mb-1">Note (optionnel)</div>
             <input name="note" className="w-full" />
@@ -118,16 +137,31 @@ export function TradeForm() {
           </button>
 
           {preview && (
-            <div className="text-xs w-full">
-              Variation de la paire : <span className={preview.priceChangePct >= 0 ? "text-green" : "text-red"}>
-                {preview.priceChangePct >= 0 ? "+" : ""}
-                {preview.priceChangePct.toFixed(2)}%
-              </span>
-              {" — "}Impact sur l&apos;AUM total :{" "}
-              <span className={preview.pnlPctOfAum >= 0 ? "text-green" : "text-red"}>
-                {preview.pnlPctOfAum >= 0 ? "+" : ""}
-                {preview.pnlPctOfAum.toFixed(3)}%
-              </span>
+            <div className="text-xs w-full space-y-0.5">
+              <div>
+                Variation de la paire :{" "}
+                <span className={preview.priceChangePct >= 0 ? "text-green" : "text-red"}>
+                  {preview.priceChangePct >= 0 ? "+" : ""}
+                  {preview.priceChangePct.toFixed(2)}%
+                </span>
+                {leverage > 1 && (
+                  <>
+                    {" — "}Sur la mise (x{leverage}) :{" "}
+                    <span className={preview.marginReturnPct >= 0 ? "text-green" : "text-red"}>
+                      {preview.marginReturnPct >= 0 ? "+" : ""}
+                      {preview.marginReturnPct.toFixed(2)}%
+                      {preview.marginReturnPct === -100 && " (liquidation)"}
+                    </span>
+                  </>
+                )}
+              </div>
+              <div>
+                Impact sur l&apos;AUM total :{" "}
+                <span className={preview.pnlPctOfAum >= 0 ? "text-green" : "text-red"}>
+                  {preview.pnlPctOfAum >= 0 ? "+" : ""}
+                  {preview.pnlPctOfAum.toFixed(3)}%
+                </span>
+              </div>
             </div>
           )}
         </div>

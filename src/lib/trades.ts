@@ -28,6 +28,7 @@ export async function logManualTrade(params: {
     entryPrice: Decimal;
     exitPrice: Decimal;
     positionSizePct: Decimal;
+    leverage: Decimal;
   };
 }) {
   return prisma.$transaction(async (tx) => {
@@ -64,6 +65,7 @@ export async function logManualTrade(params: {
         entryPrice: params.position?.entryPrice,
         exitPrice: params.position?.exitPrice,
         positionSizePct: params.position?.positionSizePct,
+        leverage: params.position?.leverage,
       },
     });
 

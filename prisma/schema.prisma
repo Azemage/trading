@@ -115,6 +115,7 @@ model Trade {
   entryPrice      Decimal?        @db.Decimal(24, 8)
   exitPrice       Decimal?        @db.Decimal(24, 8)
   positionSizePct Decimal?        @db.Decimal(7, 4) // % de l'AUM misé sur cette paire
+  leverage        Decimal?        @db.Decimal(6, 2) // multiplicateur (1 = spot, pas de levier)
 
   feeLedgerEntries FeeLedger[]
 

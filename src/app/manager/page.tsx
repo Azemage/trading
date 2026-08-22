@@ -97,9 +97,10 @@ export default async function ManagerView() {
           <div className="text-xs text-gold mb-2">Ajustement manuel de l&apos;AUM</div>
           <PoolAdjustForm currentTotalAssets={totalAssets} />
           <div className="text-xs text-muted mt-2">
-            Impose directement un AUM (donc un NAV) pour tester des scénarios. Aucun frais prélevé, ne modifie pas le
-            high-water mark. À ne pas utiliser en production réelle — chaque usage est tracé dans le journal
-            d&apos;audit avec le motif saisi.
+            Impose directement un AUM (donc un NAV) pour tester des scénarios. Aucun frais prélevé ; réinitialise
+            aussi le high-water mark à ce niveau (sinon le prochain trade facturerait rétroactivement l&apos;écart
+            créé par cet ajustement). À ne pas utiliser en production réelle — chaque usage est tracé dans le
+            journal d&apos;audit avec le motif saisi.
           </div>
         </div>
       </div>

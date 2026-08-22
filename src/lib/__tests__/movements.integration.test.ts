@@ -8,7 +8,7 @@ import {
   requestDeposit,
   requestWithdrawal,
 } from "../movements";
-import { logManualTrade } from "../trades";
+import { adjustPoolAssets, logManualTrade } from "../trades";
 
 async function resetDb() {
   await prisma.auditLog.deleteMany();
@@ -169,5 +169,33 @@ describe("mouvements — cas limites critiques (argent de tiers)", () => {
     });
     // Bob dépose au NAV figé de 0.9 => 900 / 0.9 = 1000 parts, pas 900.
     expect(bobHolding.parts.toString()).toBe("1000");
+  });
+
+  it("l'ajustement manuel de l'AUM ne fait pas rattraper de frais sur le trade suivant (bug corrigé)", async () => {
+    const client = await makeClient("hwm@test.local");
+    const manager = await makeManager("mgr6@test.local");
+
+    const dep = await requestDeposit(client.id, new Decimal(1000));
+    await makeEligible(dep.id);
+    await approveDeposit(dep.id, manager.id); // NAV = 1, HWM = 1
+
+    // Forçage de test : AUM boosté à 2000 (NAV = 2) sans passer par un trade.
+    await adjustPoolAssets({
+      newTotalAssets: new Decimal(2000),
+      reason: "scénario de test",
+      managerId: manager.id,
+    });
+    const poolAfterAdjust = await prisma.poolState.findUniqueOrThrow({ where: { id: 1 } });
+    // Le HWM doit suivre l'ajustement, sinon le prochain trade rattrape tout l'écart.
+    expect(poolAfterAdjust.highWaterMark.toString()).toBe("2");
+
+    // Petit trade positif (+1.58%) juste après.
+    const trade = await logManualTrade({ pnlPct: new Decimal(1.58), loggedById: manager.id });
+    const poolAfterTrade = await prisma.poolState.findUniqueOrThrow({ where: { id: 1 } });
+
+    // Le résultat net doit rester positif : pas de frais de "rattrapage" sur
+    // l'écart créé par l'ajustement manuel, seulement sur le gain réel du trade.
+    expect(poolAfterTrade.totalAssets.greaterThan(2000)).toBe(true);
+    expect(trade.navAfter.greaterThan(trade.navBefore)).toBe(true);
   });
 });

@@ -107,9 +107,13 @@ export async function logManualTrade(params: {
 /**
  * Outil de test/correction : impose directement une nouvelle valeur d'AUM
  * total (donc un nouveau NAV, à parts constantes), sans passer par un trade.
- * Ne prélève AUCUN frais et ne touche PAS le high-water mark — ce n'est pas
- * un gain de trading réel, juste un ajustement (ex: correction comptable,
- * mise en place d'un scénario de test). Motif obligatoire, tracé en audit.
+ * Ne prélève AUCUN frais. Réinitialise aussi le high-water mark à ce nouveau
+ * NAV : sinon, la formule de frais de performance (calculée sur tout l'écart
+ * depuis le dernier HWM, pas seulement le gain du trade en cours) facturerait
+ * rétroactivement l'écart créé par cet ajustement sur le PROCHAIN trade
+ * enregistré — un trade légèrement positif pourrait alors apparaître comme
+ * une perte nette à cause d'un frais de "rattrapage" inattendu. Motif
+ * obligatoire, tracé en audit.
  */
 export async function adjustPoolAssets(params: {
   newTotalAssets: Decimal;
@@ -127,12 +131,12 @@ export async function adjustPoolAssets(params: {
     const pool = await lockPoolState(tx);
     const navBefore = computeNav(pool.totalAssets, pool.totalParts);
 
+    const navAfter = computeNav(params.newTotalAssets, pool.totalParts);
+
     await tx.poolState.update({
       where: { id: 1 },
-      data: { totalAssets: params.newTotalAssets },
+      data: { totalAssets: params.newTotalAssets, highWaterMark: navAfter },
     });
-
-    const navAfter = computeNav(params.newTotalAssets, pool.totalParts);
 
     await tx.navSnapshot.create({
       data: {

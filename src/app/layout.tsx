@@ -47,6 +47,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                   Espace gestionnaire
                 </Link>
               )}
+              {session?.user && (
+                <Link href="/security" className="text-muted hover:text-foreground">
+                  Sécurité
+                </Link>
+              )}
               {session?.user ? (
                 <form
                   action={async () => {

@@ -92,8 +92,13 @@ export default async function ClientView() {
         <div className="card">
           <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
             <div className="label-mono">Historique de mon solde</div>
-            <div className="text-xs text-muted">
-              Total déposé : <span className="text-foreground">{fmt(totalDeposited)}</span>
+            <div className="flex items-center gap-3 text-xs">
+              <span className="text-muted">
+                Total déposé : <span className="text-foreground">{fmt(totalDeposited)}</span>
+              </span>
+              <a href="/client/export/ledger" className="text-green">
+                Exporter en CSV ↓
+              </a>
             </div>
           </div>
           <BalanceChart data={chartData} />

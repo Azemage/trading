@@ -107,6 +107,11 @@ export const emailTemplates = {
       "Nouvelle demande de retrait",
       `<p>${clientName} a demandé un retrait de <strong>${fmtUsd(amount)}</strong>. À traiter dans l'espace gestionnaire.</p>`
     ),
+  passwordReset: (resetUrl: string) =>
+    layout(
+      "Réinitialisation du mot de passe",
+      `<p>Une demande de réinitialisation de mot de passe a été faite pour ce compte.</p><p><a href="${resetUrl}">Choisir un nouveau mot de passe</a></p><p>Ce lien expire dans 1 heure. Si tu n'es pas à l'origine de cette demande, ignore cet email.</p>`
+    ),
   managerNewKyc: (clientName: string, hasPhotos: boolean) =>
     layout(
       "Nouvelle soumission KYC",

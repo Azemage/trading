@@ -79,6 +79,8 @@ model User {
   kycStatus    KycStatus @default(PENDING)
   usdcNetwork  UsdcNetwork?
   usdcAddress  String?
+  twoFactorSecret  String?
+  twoFactorEnabled Boolean  @default(false)
   createdAt    DateTime  @default(now())
 
   holding           ClientHolding?
@@ -88,6 +90,7 @@ model User {
   auditLogs         AuditLog[]
   kycSubmissions    KycSubmission[]   @relation("KycSubmittedBy")
   kycReviewed       KycSubmission[]   @relation("KycReviewedBy")
+  passwordResetTokens PasswordResetToken[]
 
   @@map("users")
 }
@@ -194,6 +197,21 @@ model PendingMovement {
   rejectionReason String?
 
   @@map("pending_movements")
+}
+
+// Jeton de réinitialisation de mot de passe — écriture seule sur usedAt (marqué
+// consommé, jamais supprimé), expire après un délai court (voir lib/password-reset.ts).
+// Seul le hash du jeton est stocké, jamais le jeton en clair.
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@map("password_reset_tokens")
 }
 
 // Historique du NAV pour le graphique de la vue globale.

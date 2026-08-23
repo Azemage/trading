@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/prisma";
+import { verifyPassword } from "@/lib/credentials";
+import { verifyTwoFactorCode } from "@/lib/two-factor";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
@@ -11,19 +11,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       credentials: {
         email: {},
         password: {},
+        code: {},
       },
       authorize: async (credentials) => {
-        const email = String(credentials?.email ?? "")
-          .trim()
-          .toLowerCase();
+        const email = String(credentials?.email ?? "");
         const password = String(credentials?.password ?? "");
-        if (!email || !password) return null;
+        const code = String(credentials?.code ?? "").trim();
 
-        const user = await prisma.user.findUnique({ where: { email } });
+        const user = await verifyPassword(email, password);
         if (!user) return null;
 
-        const valid = await bcrypt.compare(password, user.passwordHash);
-        if (!valid) return null;
+        if (user.twoFactorEnabled) {
+          if (!user.twoFactorSecret || !code || !(await verifyTwoFactorCode(user.twoFactorSecret, code))) {
+            return null;
+          }
+        }
 
         return {
           id: user.id,

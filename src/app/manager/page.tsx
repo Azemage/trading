@@ -59,7 +59,12 @@ export default async function ManagerView() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-8 py-8 space-y-6">
-      <h1 className="text-2xl font-bold">Espace gestionnaire</h1>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h1 className="text-2xl font-bold">Espace gestionnaire</h1>
+        <a href="/manager/audit" className="text-xs text-muted hover:text-foreground">
+          Journal d&apos;audit →
+        </a>
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="card">
@@ -266,7 +271,12 @@ export default async function ManagerView() {
       </div>
 
       <div className="card">
-        <div className="label-mono mb-3">Fiche de calcul — entrées, trades &amp; revenus de perf</div>
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <div className="label-mono">Fiche de calcul — entrées, trades &amp; revenus de perf</div>
+          <a href="/manager/export/ledger" className="text-xs text-green">
+            Exporter en CSV ↓
+          </a>
+        </div>
         {ledger.length === 0 ? (
           <div className="text-muted text-sm">Aucun mouvement enregistré pour l&apos;instant.</div>
         ) : (

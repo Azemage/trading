@@ -23,14 +23,31 @@ function computePreview(
   return { priceChangePct, marginReturnPct, pnlPctOfAum };
 }
 
-export function TradeForm() {
+export function TradeForm({ currentTotalAssets }: { currentTotalAssets: number }) {
   const [state, formAction, pending] = useActionState(logTradeAction, { error: null });
   const [mode, setMode] = useState<"simple" | "position">("position");
   const [entryPrice, setEntryPrice] = useState("");
   const [exitPrice, setExitPrice] = useState("");
   const [positionSizePct, setPositionSizePct] = useState("");
+  const [positionSizeUsd, setPositionSizeUsd] = useState("");
   const [direction, setDirection] = useState<"LONG" | "SHORT">("LONG");
   const [leverage, setLeverage] = useState<number>(1);
+
+  function handleUsdChange(value: string) {
+    setPositionSizeUsd(value);
+    const usd = parseFloat(value);
+    if (!Number.isNaN(usd) && currentTotalAssets > 0) {
+      setPositionSizePct(((usd / currentTotalAssets) * 100).toFixed(4));
+    }
+  }
+
+  function handlePctChange(value: string) {
+    setPositionSizePct(value);
+    const pct = parseFloat(value);
+    if (!Number.isNaN(pct) && currentTotalAssets > 0) {
+      setPositionSizeUsd(((pct / 100) * currentTotalAssets).toFixed(2));
+    }
+  }
 
   const preview = useMemo(
     () => computePreview(entryPrice, exitPrice, positionSizePct, direction, leverage),
@@ -100,6 +117,18 @@ export function TradeForm() {
             />
           </div>
           <div>
+            <div className="text-xs text-muted mb-1">Montant misé ($)</div>
+            <input
+              type="number"
+              step="any"
+              min="0"
+              className="w-28"
+              value={positionSizeUsd}
+              onChange={(e) => handleUsdChange(e.target.value)}
+              placeholder={`AUM: ${currentTotalAssets.toFixed(0)}$`}
+            />
+          </div>
+          <div>
             <div className="text-xs text-muted mb-1">% de l&apos;AUM misé</div>
             <input
               name="positionSizePct"
@@ -110,7 +139,7 @@ export function TradeForm() {
               required
               className="w-24"
               value={positionSizePct}
-              onChange={(e) => setPositionSizePct(e.target.value)}
+              onChange={(e) => handlePctChange(e.target.value)}
             />
           </div>
           <div>

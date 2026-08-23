@@ -74,7 +74,7 @@ export default async function ManagerView() {
 
       <div className="card">
         <div className="label-mono text-gold mb-3">Enregistrer un trade / résultat du jour (saisie manuelle)</div>
-        <TradeForm />
+        <TradeForm currentTotalAssets={totalAssets} />
         <div className="text-xs text-muted mt-2">
           Performance fee de 30% prélevée sur les gains au-dessus du high-water mark, aucun frais sinon.
         </div>

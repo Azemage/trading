@@ -26,6 +26,17 @@ export function KycForm() {
         <label className="text-xs text-muted block mb-1">Numéro de document</label>
         <input name="documentNumber" required className="w-full" />
       </div>
+      <div className="grid sm:grid-cols-2 gap-2">
+        <div>
+          <label className="text-xs text-muted block mb-1">Photo recto</label>
+          <input name="idFront" type="file" accept="image/jpeg,image/png,image/webp" required className="w-full text-xs" />
+        </div>
+        <div>
+          <label className="text-xs text-muted block mb-1">Photo verso</label>
+          <input name="idBack" type="file" accept="image/jpeg,image/png,image/webp" required className="w-full text-xs" />
+        </div>
+      </div>
+      <div className="text-xs text-muted">JPEG, PNG ou WebP, 5 Mo maximum par photo.</div>
       <div>
         <label className="text-xs text-muted block mb-1">Note (optionnel)</label>
         <input name="note" className="w-full" />

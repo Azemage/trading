@@ -63,12 +63,26 @@ export async function submitKycAction(
 ): Promise<{ error: string | null }> {
   try {
     const user = await requireClient();
+
+    const idFrontFile = formData.get("idFront");
+    const idBackFile = formData.get("idBack");
+    const idFront =
+      idFrontFile instanceof File && idFrontFile.size > 0
+        ? { data: Buffer.from(await idFrontFile.arrayBuffer()), mimeType: idFrontFile.type }
+        : undefined;
+    const idBack =
+      idBackFile instanceof File && idBackFile.size > 0
+        ? { data: Buffer.from(await idBackFile.arrayBuffer()), mimeType: idBackFile.type }
+        : undefined;
+
     await submitKyc({
       clientId: user.id,
       legalName: String(formData.get("legalName") ?? ""),
       documentType: String(formData.get("documentType") ?? ""),
       documentNumber: String(formData.get("documentNumber") ?? ""),
       note: String(formData.get("note") ?? ""),
+      idFront,
+      idBack,
     });
     await notifyManagers("Nouvelle soumission KYC", emailTemplates.managerNewKyc(user.name ?? ""));
     revalidatePath("/client");

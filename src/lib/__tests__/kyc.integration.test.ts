@@ -97,4 +97,51 @@ describe("KYC — revue manuelle", () => {
       KycError
     );
   });
+
+  it("accepte une soumission avec recto/verso au format valide et les stocke", async () => {
+    const client = await makeClient("kycphoto1@test.local");
+    const idFront = { data: Buffer.from([0xff, 0xd8, 0xff]), mimeType: "image/jpeg" };
+    const idBack = { data: Buffer.from([0x89, 0x50, 0x4e, 0x47]), mimeType: "image/png" };
+
+    const sub = await submitKyc({
+      clientId: client.id,
+      legalName: "Jean Dupont",
+      documentType: "Passeport",
+      documentNumber: "AB123456",
+      idFront,
+      idBack,
+    });
+
+    const stored = await prisma.kycSubmission.findUniqueOrThrow({ where: { id: sub.id } });
+    expect(stored.idFrontMimeType).toBe("image/jpeg");
+    expect(stored.idBackMimeType).toBe("image/png");
+    expect(Buffer.from(stored.idFrontImage!).equals(idFront.data)).toBe(true);
+  });
+
+  it("rejette un format de photo non supporté", async () => {
+    const client = await makeClient("kycphoto2@test.local");
+    await expect(
+      submitKyc({
+        clientId: client.id,
+        legalName: "Jean Dupont",
+        documentType: "Passeport",
+        documentNumber: "AB123456",
+        idFront: { data: Buffer.from("fake pdf"), mimeType: "application/pdf" },
+      })
+    ).rejects.toThrow(/format/);
+  });
+
+  it("rejette une photo trop volumineuse", async () => {
+    const client = await makeClient("kycphoto3@test.local");
+    const tooLarge = Buffer.alloc(6 * 1024 * 1024); // 6 Mo > limite de 5 Mo
+    await expect(
+      submitKyc({
+        clientId: client.id,
+        legalName: "Jean Dupont",
+        documentType: "Passeport",
+        documentNumber: "AB123456",
+        idFront: { data: tooLarge, mimeType: "image/jpeg" },
+      })
+    ).rejects.toThrow(/volumineux/);
+  });
 });

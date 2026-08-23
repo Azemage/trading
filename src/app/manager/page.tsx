@@ -125,6 +125,36 @@ export default async function ManagerView() {
                 {k.client.name} ({k.client.email}) — {k.documentType} {k.documentNumber}
               </div>
               <div className="text-xs text-muted">Nom légal déclaré : {k.legalName}{k.note ? ` — ${k.note}` : ""}</div>
+              {(k.idFrontImage || k.idBackImage) && (
+                <div className="flex gap-2">
+                  {k.idFrontImage && k.idFrontMimeType && (
+                    <a
+                      href={`data:${k.idFrontMimeType};base64,${Buffer.from(k.idFrontImage).toString("base64")}`}
+                      target="_blank"
+                      rel="noopener"
+                    >
+                      <img
+                        src={`data:${k.idFrontMimeType};base64,${Buffer.from(k.idFrontImage).toString("base64")}`}
+                        alt="Recto pièce d'identité"
+                        className="h-24 w-auto rounded border border-line"
+                      />
+                    </a>
+                  )}
+                  {k.idBackImage && k.idBackMimeType && (
+                    <a
+                      href={`data:${k.idBackMimeType};base64,${Buffer.from(k.idBackImage).toString("base64")}`}
+                      target="_blank"
+                      rel="noopener"
+                    >
+                      <img
+                        src={`data:${k.idBackMimeType};base64,${Buffer.from(k.idBackImage).toString("base64")}`}
+                        alt="Verso pièce d'identité"
+                        className="h-24 w-auto rounded border border-line"
+                      />
+                    </a>
+                  )}
+                </div>
+              )}
               <div className="flex gap-2">
                 <form action={reviewKycAction.bind(null, k.id)}>
                   <input type="hidden" name="decision" value="approve" />

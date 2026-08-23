@@ -103,6 +103,10 @@ model KycSubmission {
   documentType    String
   documentNumber  String
   note            String?
+  idFrontImage    Bytes?
+  idFrontMimeType String?
+  idBackImage     Bytes?
+  idBackMimeType  String?
   status          KycSubmissionStatus @default(PENDING)
   submittedAt     DateTime            @default(now())
   reviewedAt      DateTime?

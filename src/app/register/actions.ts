@@ -7,10 +7,13 @@ export async function registerAction(
   _prevState: { error: string | null },
   formData: FormData
 ): Promise<{ error: string | null }> {
+  const usdcAddress = String(formData.get("usdcAddress") ?? "").trim();
   const parsed = registerSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
     password: formData.get("password"),
+    usdcNetwork: usdcAddress ? formData.get("usdcNetwork") || undefined : undefined,
+    usdcAddress: usdcAddress || undefined,
   });
   if (!parsed.success) {
     return { error: "Champs invalides (mot de passe : 10 caractères minimum)" };

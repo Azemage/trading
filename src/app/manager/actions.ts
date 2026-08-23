@@ -13,7 +13,22 @@ import { adjustPoolAssets, logManualTrade } from "@/lib/trades";
 import { ALLOWED_LEVERAGES, computePositionPnlPct } from "@/lib/position";
 import { createTestClient } from "@/lib/test-clients";
 import { resetAllTestData } from "@/lib/admin-reset";
+import { reviewKyc } from "@/lib/kyc";
+import { sendEmail, emailTemplates } from "@/lib/email";
+import { prisma } from "@/lib/prisma";
 import type { TradeDirection } from "@prisma/client";
+
+async function getMovementClient(movementId: string) {
+  const movement = await prisma.pendingMovement.findUniqueOrThrow({
+    where: { id: movementId },
+    include: { client: { select: { name: true, email: true } } },
+  });
+  return {
+    email: movement.client.email,
+    name: movement.client.name,
+    amount: (movement.grantedAmount ?? movement.amount).toNumber(),
+  };
+}
 
 async function requireManager() {
   const session = await auth();
@@ -26,6 +41,8 @@ async function requireManager() {
 export async function approveDepositAction(movementId: string) {
   const manager = await requireManager();
   await approveDeposit(movementId, manager.id);
+  const c = await getMovementClient(movementId);
+  await sendEmail({ to: c.email, subject: "Dépôt confirmé", html: emailTemplates.depositApproved(c.name, c.amount) });
   revalidatePath("/manager");
 }
 
@@ -33,6 +50,8 @@ export async function rejectDepositAction(movementId: string, formData: FormData
   const manager = await requireManager();
   const reason = String(formData.get("reason") ?? "Rejeté par le gestionnaire");
   await rejectDeposit(movementId, manager.id, reason);
+  const c = await getMovementClient(movementId);
+  await sendEmail({ to: c.email, subject: "Dépôt rejeté", html: emailTemplates.depositRejected(c.name, c.amount, reason) });
   revalidatePath("/manager");
 }
 
@@ -40,6 +59,12 @@ export async function sendWithdrawalAction(movementId: string, formData: FormDat
   const manager = await requireManager();
   const txHash = String(formData.get("txHash") ?? "");
   await markWithdrawalSent(movementId, manager.id, txHash);
+  const c = await getMovementClient(movementId);
+  await sendEmail({
+    to: c.email,
+    subject: "Retrait envoyé",
+    html: emailTemplates.withdrawalSent(c.name, c.amount, txHash),
+  });
   revalidatePath("/manager");
 }
 
@@ -47,6 +72,12 @@ export async function rejectWithdrawalAction(movementId: string, formData: FormD
   const manager = await requireManager();
   const reason = String(formData.get("reason") ?? "Rejeté par le gestionnaire");
   await rejectWithdrawal(movementId, manager.id, reason);
+  const c = await getMovementClient(movementId);
+  await sendEmail({
+    to: c.email,
+    subject: "Retrait rejeté",
+    html: emailTemplates.withdrawalRejected(c.name, c.amount, reason),
+  });
   revalidatePath("/manager");
 }
 
@@ -171,6 +202,28 @@ export async function createTestClientAction(
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Erreur inconnue", created: null };
   }
+}
+
+export async function reviewKycAction(submissionId: string, formData: FormData) {
+  const manager = await requireManager();
+  const approve = String(formData.get("decision") ?? "") === "approve";
+  const reason = String(formData.get("reason") ?? "");
+
+  await reviewKyc({ submissionId, approve, reason, managerId: manager.id });
+
+  const submission = await prisma.kycSubmission.findUniqueOrThrow({
+    where: { id: submissionId },
+    include: { client: { select: { name: true, email: true } } },
+  });
+  await sendEmail({
+    to: submission.client.email,
+    subject: approve ? "Vérification KYC approuvée" : "Vérification KYC rejetée",
+    html: approve
+      ? emailTemplates.kycApproved(submission.client.name)
+      : emailTemplates.kycRejected(submission.client.name, reason),
+  });
+
+  revalidatePath("/manager");
 }
 
 export async function resetAllTestDataAction(

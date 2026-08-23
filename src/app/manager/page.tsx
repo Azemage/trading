@@ -6,6 +6,7 @@ import {
   approveDepositAction,
   rejectDepositAction,
   rejectWithdrawalAction,
+  reviewKycAction,
   sendWithdrawalAction,
 } from "./actions";
 import { TradeForm } from "./trade-form";
@@ -13,6 +14,7 @@ import { PoolAdjustForm } from "./pool-adjust-form";
 import { CreateTestClientForm } from "./create-test-client-form";
 import { ResetTestDataForm } from "./reset-test-data-form";
 import { buildManagerLedger } from "@/lib/ledger";
+import { USDC_NETWORK_LABELS, type UsdcNetworkValue } from "@/lib/usdc";
 
 function fmt(n: number) {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " $";
@@ -23,7 +25,7 @@ export default async function ManagerView() {
   if (!session?.user) redirect("/login");
   if (session.user.role !== "MANAGER") redirect("/client");
 
-  const [pool, pendingDeposits, pendingWithdrawals, feeAgg, holdings, ledger] = await Promise.all([
+  const [pool, pendingDeposits, pendingWithdrawals, feeAgg, holdings, ledger, pendingKyc] = await Promise.all([
     prisma.poolState.findUnique({ where: { id: 1 } }),
     prisma.pendingMovement.findMany({
       where: { type: "DEPOSIT", status: "PENDING_CONFIRMATION" },
@@ -32,7 +34,7 @@ export default async function ManagerView() {
     }),
     prisma.pendingMovement.findMany({
       where: { type: "WITHDRAWAL", status: "PENDING_EXECUTION" },
-      include: { client: { select: { name: true, email: true } } },
+      include: { client: { select: { name: true, email: true, usdcNetwork: true, usdcAddress: true } } },
       orderBy: { requestedAt: "asc" },
     }),
     prisma.feeLedger.aggregate({ where: { type: "PERFORMANCE" }, _sum: { amount: true } }),
@@ -41,6 +43,11 @@ export default async function ManagerView() {
       include: { client: { select: { name: true, email: true } } },
     }),
     buildManagerLedger(100),
+    prisma.kycSubmission.findMany({
+      where: { status: "PENDING" },
+      include: { client: { select: { name: true, email: true } } },
+      orderBy: { submittedAt: "asc" },
+    }),
   ]);
 
   const totalAssets = pool?.totalAssets.toNumber() ?? 0;
@@ -108,6 +115,33 @@ export default async function ManagerView() {
       </div>
 
       <div className="card">
+        <div className="label-mono mb-3">KYC à valider</div>
+        {pendingKyc.length === 0 ? (
+          <div className="text-muted text-sm">Aucune soumission en attente.</div>
+        ) : (
+          pendingKyc.map((k) => (
+            <div key={k.id} className="py-2 border-t border-line first:border-t-0 text-sm space-y-1">
+              <div>
+                {k.client.name} ({k.client.email}) — {k.documentType} {k.documentNumber}
+              </div>
+              <div className="text-xs text-muted">Nom légal déclaré : {k.legalName}{k.note ? ` — ${k.note}` : ""}</div>
+              <div className="flex gap-2">
+                <form action={reviewKycAction.bind(null, k.id)}>
+                  <input type="hidden" name="decision" value="approve" />
+                  <button className="btn">Approuver ✓</button>
+                </form>
+                <form action={reviewKycAction.bind(null, k.id)} className="flex gap-1">
+                  <input type="hidden" name="decision" value="reject" />
+                  <input name="reason" placeholder="motif du rejet" required className="text-xs w-40" />
+                  <button className="btn btn-red">Rejeter</button>
+                </form>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="card">
         <div className="label-mono mb-3">Dépôts à valider</div>
         {pendingDeposits.length === 0 ? (
           <div className="text-muted text-sm">Aucun dépôt en attente.</div>
@@ -153,6 +187,15 @@ export default async function ManagerView() {
                   {!eligible && (
                     <span className="text-xs text-muted"> (éligible le {w.eligibleAt.toLocaleString("fr-FR")})</span>
                   )}
+                  <div className="text-xs text-muted">
+                    {w.client.usdcAddress ? (
+                      <>
+                        {USDC_NETWORK_LABELS[w.client.usdcNetwork as UsdcNetworkValue]} — <code>{w.client.usdcAddress}</code>
+                      </>
+                    ) : (
+                      <span className="text-red">Aucune adresse USDC enregistrée</span>
+                    )}
+                  </div>
                 </span>
                 <div className="flex gap-2 items-center">
                   <form action={sendWithdrawalAction.bind(null, w.id)} className="flex gap-1 items-center">

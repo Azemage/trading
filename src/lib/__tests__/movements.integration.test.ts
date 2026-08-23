@@ -12,6 +12,7 @@ import { adjustPoolAssets, logManualTrade } from "../trades";
 
 async function resetDb() {
   await prisma.auditLog.deleteMany();
+  await prisma.kycSubmission.deleteMany();
   await prisma.feeLedger.deleteMany();
   await prisma.trade.deleteMany();
   await prisma.navSnapshot.deleteMany();
@@ -21,9 +22,19 @@ async function resetDb() {
   await prisma.user.deleteMany();
 }
 
+// KYC vérifié + adresse USDC par défaut : la plupart des tests portent sur
+// la mécanique NAV/gate/HWM, pas sur le garde-fou KYC (testé séparément).
 async function makeClient(email: string) {
   return prisma.user.create({
-    data: { email, passwordHash: "x", name: email, role: "CLIENT" },
+    data: {
+      email,
+      passwordHash: "x",
+      name: email,
+      role: "CLIENT",
+      kycStatus: "VERIFIED",
+      usdcNetwork: "ETHEREUM",
+      usdcAddress: "0x" + "a".repeat(40),
+    },
   });
 }
 async function makeManager(email: string) {
@@ -210,5 +221,44 @@ describe("mouvements — cas limites critiques (argent de tiers)", () => {
     // l'écart créé par l'ajustement manuel, seulement sur le gain réel du trade.
     expect(poolAfterTrade.totalAssets.greaterThan(2000)).toBe(true);
     expect(trade.navAfter.greaterThan(trade.navBefore)).toBe(true);
+  });
+
+  it("bloque un retrait tant que le KYC n'est pas vérifié", async () => {
+    const client = await prisma.user.create({
+      data: {
+        email: "nokyc@test.local",
+        passwordHash: "x",
+        name: "No Kyc",
+        role: "CLIENT",
+        usdcNetwork: "ETHEREUM",
+        usdcAddress: "0x" + "b".repeat(40),
+      },
+    });
+    const manager = await makeManager("mgr8@test.local");
+
+    const dep = await requestDeposit(client.id, new Decimal(1000));
+    await makeEligible(dep.id);
+    await approveDeposit(dep.id, manager.id);
+
+    await expect(requestWithdrawal(client.id, new Decimal(100))).rejects.toThrow(/KYC/);
+  });
+
+  it("bloque un retrait tant qu'aucune adresse USDC n'est enregistrée", async () => {
+    const client = await prisma.user.create({
+      data: {
+        email: "noaddr@test.local",
+        passwordHash: "x",
+        name: "No Addr",
+        role: "CLIENT",
+        kycStatus: "VERIFIED",
+      },
+    });
+    const manager = await makeManager("mgr9@test.local");
+
+    const dep = await requestDeposit(client.id, new Decimal(1000));
+    await makeEligible(dep.id);
+    await approveDeposit(dep.id, manager.id);
+
+    await expect(requestWithdrawal(client.id, new Decimal(100))).rejects.toThrow(/adresse USDC/);
   });
 });

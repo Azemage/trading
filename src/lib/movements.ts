@@ -165,6 +165,18 @@ export async function requestWithdrawal(
   clientId: string,
   amountOrAll: Decimal | "all"
 ) {
+  const client = await prisma.user.findUnique({
+    where: { id: clientId },
+    select: { kycStatus: true, usdcAddress: true },
+  });
+  if (!client) throw new MovementError("Client introuvable");
+  if (client.kycStatus !== "VERIFIED") {
+    throw new MovementError("Vérification KYC requise avant de pouvoir retirer des fonds");
+  }
+  if (!client.usdcAddress) {
+    throw new MovementError("Ajoute une adresse USDC dans ton compte avant de demander un retrait");
+  }
+
   return prisma.$transaction(async (tx) => {
     const pool = await lockPoolState(tx);
     const holding = await lockClientHolding(tx, clientId);

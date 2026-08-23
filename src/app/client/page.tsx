@@ -5,6 +5,9 @@ import { computeNav, valueForParts } from "@/lib/nav";
 import { buildClientLedger } from "@/lib/ledger";
 import { MovementForms } from "./movement-forms";
 import { BalanceChart } from "./balance-chart";
+import { KycForm } from "./kyc-form";
+import { UsdcAddressForm } from "./usdc-address-form";
+import type { UsdcNetworkValue } from "@/lib/usdc";
 
 function fmt(n: number) {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " $";
@@ -22,13 +25,21 @@ export default async function ClientView() {
   if (!session?.user) redirect("/login");
   if (session.user.role !== "CLIENT") redirect("/manager");
 
-  const [pool, holding, movements] = await Promise.all([
+  const [pool, holding, movements, me, latestKyc] = await Promise.all([
     prisma.poolState.findUnique({ where: { id: 1 } }),
     prisma.clientHolding.findUnique({ where: { clientId: session.user.id } }),
     prisma.pendingMovement.findMany({
       where: { clientId: session.user.id },
       orderBy: { requestedAt: "desc" },
       take: 30,
+    }),
+    prisma.user.findUniqueOrThrow({
+      where: { id: session.user.id },
+      select: { kycStatus: true, usdcNetwork: true, usdcAddress: true },
+    }),
+    prisma.kycSubmission.findFirst({
+      where: { clientId: session.user.id },
+      orderBy: { submittedAt: "desc" },
     }),
   ]);
 
@@ -147,6 +158,37 @@ export default async function ClientView() {
           </div>
         </div>
       )}
+
+      <div className="card space-y-4">
+        <div className="label-mono">Mon compte</div>
+
+        <div>
+          <div className="text-xs text-gold mb-2">Vérification KYC</div>
+          {me.kycStatus === "VERIFIED" ? (
+            <div className="text-green text-sm">Vérifiée ✓</div>
+          ) : latestKyc?.status === "PENDING" ? (
+            <div className="text-gold text-sm">En attente de revue par le gestionnaire.</div>
+          ) : (
+            <>
+              {latestKyc?.status === "REJECTED" && (
+                <div className="text-red text-xs mb-2">
+                  Rejetée{latestKyc.rejectionReason ? ` : ${latestKyc.rejectionReason}` : ""}. Tu peux resoumettre.
+                </div>
+              )}
+              <KycForm />
+            </>
+          )}
+          <div className="text-xs text-muted mt-2">Requise avant de pouvoir demander un retrait.</div>
+        </div>
+
+        <div className="border-t border-line pt-4">
+          <div className="text-xs text-gold mb-2">Adresse USDC pour recevoir tes retraits</div>
+          <UsdcAddressForm
+            currentNetwork={me.usdcNetwork as UsdcNetworkValue | null}
+            currentAddress={me.usdcAddress}
+          />
+        </div>
+      </div>
 
       <MovementForms />
 

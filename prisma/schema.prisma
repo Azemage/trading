@@ -54,6 +54,21 @@ enum FeeType {
   PERFORMANCE
 }
 
+enum UsdcNetwork {
+  ETHEREUM
+  POLYGON
+  BASE
+  SOLANA
+  TRON
+  OTHER
+}
+
+enum KycSubmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id           String    @id @default(uuid())
   email        String    @unique
@@ -62,6 +77,8 @@ model User {
   role         Role      @default(CLIENT)
   tier         Tier      @default(STANDARD)
   kycStatus    KycStatus @default(PENDING)
+  usdcNetwork  UsdcNetwork?
+  usdcAddress  String?
   createdAt    DateTime  @default(now())
 
   holding           ClientHolding?
@@ -69,8 +86,31 @@ model User {
   processedMovements PendingMovement[] @relation("ProcessedByManager")
   trades            Trade[]           @relation("TradeLoggedBy")
   auditLogs         AuditLog[]
+  kycSubmissions    KycSubmission[]   @relation("KycSubmittedBy")
+  kycReviewed       KycSubmission[]   @relation("KycReviewedBy")
 
   @@map("users")
+}
+
+// Revue KYC manuelle : historique des soumissions d'un client (une nouvelle
+// soumission possible après un rejet). User.kycStatus reflète toujours le
+// résultat de la soumission la plus récente.
+model KycSubmission {
+  id              String              @id @default(uuid())
+  clientId        String
+  client          User                @relation("KycSubmittedBy", fields: [clientId], references: [id])
+  legalName       String
+  documentType    String
+  documentNumber  String
+  note            String?
+  status          KycSubmissionStatus @default(PENDING)
+  submittedAt     DateTime            @default(now())
+  reviewedAt      DateTime?
+  reviewedById    String?
+  reviewedBy      User?               @relation("KycReviewedBy", fields: [reviewedById], references: [id])
+  rejectionReason String?
+
+  @@map("kyc_submissions")
 }
 
 // Singleton (une seule ligne) : état courant du pool commun.

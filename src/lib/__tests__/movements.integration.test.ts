@@ -62,8 +62,8 @@ describe("mouvements — cas limites critiques (argent de tiers)", () => {
     const pool = await prisma.poolState.findUniqueOrThrow({ where: { id: 1 } });
     expect(pool.totalAssets.toString()).toBe("1000");
 
-    // Gate mensuel = 20% de l'AUM (1000) = 200 : seul ce montant est immédiatement accordé.
-    const wd = await requestWithdrawal(client.id, new Decimal(150));
+    // Pas de plafond de gate : le retrait demandé est intégralement accordé.
+    const wd = await requestWithdrawal(client.id, new Decimal(400));
     await makeEligible(wd.id);
     await markWithdrawalSent(wd.id, manager.id, "0xabc");
 
@@ -71,8 +71,8 @@ describe("mouvements — cas limites critiques (argent de tiers)", () => {
       where: { clientId: client.id },
     });
     const poolAfter = await prisma.poolState.findUniqueOrThrow({ where: { id: 1 } });
-    expect(holding.parts.toString()).toBe("850");
-    expect(poolAfter.totalAssets.toString()).toBe("850");
+    expect(holding.parts.toString()).toBe("600");
+    expect(poolAfter.totalAssets.toString()).toBe("600");
     // invariant fondamental : totalAssets doit toujours égaler totalParts * NAV constant tant qu'aucun trade n'a eu lieu
     expect(poolAfter.totalParts.toString()).toBe(holding.parts.toString());
   });
@@ -110,23 +110,37 @@ describe("mouvements — cas limites critiques (argent de tiers)", () => {
     expect(pool.totalAssets.toString()).toBe("1300");
   });
 
-  it("gate mensuel atteint : le surplus est différé, pas envoyé", async () => {
-    const client = await makeClient("gate@test.local");
+  it("aucun plafond de gate : un client peut retirer la quasi-totalité de son solde en une fois", async () => {
+    const client = await makeClient("nogate@test.local");
     const manager = await makeManager("mgr3@test.local");
 
     const dep = await requestDeposit(client.id, new Decimal(1000));
     await makeEligible(dep.id);
     await approveDeposit(dep.id, manager.id);
 
-    // Gate = 20% de 1000 = 200. Le client demande 350.
-    const wd = await requestWithdrawal(client.id, new Decimal(350));
-    expect(wd.grantedAmount?.toString()).toBe("200");
-    expect(wd.deferredAmount?.toString()).toBe("150");
+    // 90% de l'AUM en une seule demande — aurait été bloqué par l'ancien gate à 20%.
+    const wd = await requestWithdrawal(client.id, new Decimal(900));
+    expect(wd.grantedAmount?.toString()).toBe("900");
 
     const pool = await prisma.poolState.findUniqueOrThrow({ where: { id: 1 } });
-    expect(pool.gateUsedThisPeriod.toString()).toBe("200");
-    // seule la part accordée est réellement sortie du pool
-    expect(pool.totalAssets.toString()).toBe("800");
+    expect(pool.totalAssets.toString()).toBe("100");
+  });
+
+  it("\"all\" retire bien 100% du solde, sans aucun plafond", async () => {
+    const client = await makeClient("allout@test.local");
+    const manager = await makeManager("mgr7@test.local");
+
+    const dep = await requestDeposit(client.id, new Decimal(1000));
+    await makeEligible(dep.id);
+    await approveDeposit(dep.id, manager.id);
+
+    const wd = await requestWithdrawal(client.id, "all");
+    expect(wd.grantedAmount?.toString()).toBe("1000");
+
+    const pool = await prisma.poolState.findUniqueOrThrow({ where: { id: 1 } });
+    const holding = await prisma.clientHolding.findUniqueOrThrow({ where: { clientId: client.id } });
+    expect(pool.totalAssets.toString()).toBe("0");
+    expect(holding.parts.toString()).toBe("0");
   });
 
   it("un retrait rejeté avant envoi restitue intégralement les parts et l'AUM", async () => {
@@ -145,7 +159,6 @@ describe("mouvements — cas limites critiques (argent de tiers)", () => {
       where: { clientId: client.id },
     });
     expect(pool.totalAssets.toString()).toBe("1000");
-    expect(pool.gateUsedThisPeriod.toString()).toBe("0");
     expect(holding.parts.toString()).toBe("1000");
   });
 

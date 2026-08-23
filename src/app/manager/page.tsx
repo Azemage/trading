@@ -2,12 +2,10 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { computeNav } from "@/lib/nav";
-import { computeGateBudget } from "@/lib/gate";
 import {
   approveDepositAction,
   rejectDepositAction,
   rejectWithdrawalAction,
-  resetGateAction,
   sendWithdrawalAction,
 } from "./actions";
 import { TradeForm } from "./trade-form";
@@ -48,8 +46,6 @@ export default async function ManagerView() {
   const totalAssets = pool?.totalAssets.toNumber() ?? 0;
   const totalParts = pool?.totalParts.toNumber() ?? 0;
   const nav = computeNav(totalAssets, totalParts).toNumber();
-  const gateBudget = computeGateBudget(totalAssets).toNumber();
-  const gateUsed = pool?.gateUsedThisPeriod.toNumber() ?? 0;
   // Horodatage serveur pris une fois par requête, comparé aux échéances déjà figées en base.
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
@@ -58,14 +54,10 @@ export default async function ManagerView() {
     <div className="max-w-5xl mx-auto px-4 sm:px-8 py-8 space-y-6">
       <h1 className="text-2xl font-bold">Espace gestionnaire</h1>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div className="card">
           <div className="label-mono">Revenu perf. fee (cumul)</div>
           <div className="text-xl font-bold text-gold mt-1">{fmt(feeAgg._sum.amount?.toNumber() ?? 0)}</div>
-        </div>
-        <div className="card">
-          <div className="label-mono">Gate utilisé ce mois</div>
-          <div className="text-xl font-bold mt-1">{fmt(gateUsed)} / {fmt(gateBudget)}</div>
         </div>
         <div className="card">
           <div className="label-mono">Dépôts en attente</div>
@@ -146,23 +138,18 @@ export default async function ManagerView() {
       </div>
 
       <div className="card">
-        <div className="flex items-center justify-between mb-3">
+        <div className="mb-3">
           <div className="label-mono">Sorties à traiter</div>
-          <form action={resetGateAction}>
-            <button className="btn btn-gold">↻ nouvelle période (reset gate)</button>
-          </form>
         </div>
         {pendingWithdrawals.length === 0 ? (
           <div className="text-muted text-sm">Aucune sortie en attente.</div>
         ) : (
           pendingWithdrawals.map((w) => {
             const eligible = now >= w.eligibleAt.getTime();
-            const deferred = w.deferredAmount?.toNumber() ?? 0;
             return (
               <div key={w.id} className="flex items-center justify-between flex-wrap gap-2 py-2 border-t border-line first:border-t-0 text-sm">
                 <span>
-                  {w.client.name} — accordé {fmt(w.grantedAmount?.toNumber() ?? 0)}
-                  {deferred > 0.01 && <span className="text-gold"> ({fmt(deferred)} différé)</span>}
+                  {w.client.name} — {fmt(w.grantedAmount?.toNumber() ?? 0)}
                   {!eligible && (
                     <span className="text-xs text-muted"> (éligible le {w.eligibleAt.toLocaleString("fr-FR")})</span>
                   )}

@@ -80,6 +80,8 @@ export type ClientLedgerEntry =
       date: Date;
       pnlPct: number;
       pair: string | null;
+      grossGainUsd: number;
+      feeUsd: number;
       gainUsd: number;
       balanceBefore: number;
       balanceAfter: number;
@@ -156,12 +158,18 @@ export async function buildClientLedger(clientId: string) {
       balance = balanceBefore - r.amount;
       return { kind: "WITHDRAWAL", date: r.date, amount: r.amount, balanceBefore, balanceAfter: balance };
     }
+    // Solde brut (avant frais) : le % de résultat appliqué directement au solde.
+    const grossBalanceAfter = balanceBefore * (1 + r.pnlPct / 100);
+    // Solde net (après frais) : même ratio NAV net que celui réellement appliqué au pool.
     balance = r.navBefore > 0 ? balanceBefore * (r.navAfter / r.navBefore) : balanceBefore;
+    const feeUsd = Math.max(grossBalanceAfter - balance, 0);
     return {
       kind: "TRADE",
       date: r.date,
       pnlPct: r.pnlPct,
       pair: r.pair,
+      grossGainUsd: grossBalanceAfter - balanceBefore,
+      feeUsd,
       gainUsd: balance - balanceBefore,
       balanceBefore,
       balanceAfter: balance,

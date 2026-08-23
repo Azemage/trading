@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { computeNav, valueForParts } from "@/lib/nav";
-import { computeGateRemaining } from "@/lib/gate";
 import { buildClientLedger } from "@/lib/ledger";
 import { MovementForms } from "./movement-forms";
 import { BalanceChart } from "./balance-chart";
@@ -38,7 +37,6 @@ export default async function ClientView() {
   const nav = computeNav(totalAssets, totalParts).toNumber();
   const parts = holding?.parts.toNumber() ?? 0;
   const confirmedBalance = valueForParts(parts, nav).toNumber();
-  const gateRemaining = computeGateRemaining(totalAssets, pool?.gateUsedThisPeriod ?? 0).toNumber();
 
   const { joinDate, totalDeposited, entries } = await buildClientLedger(session.user.id);
 
@@ -95,6 +93,7 @@ export default async function ClientView() {
                   <th className="text-left p-1.5">Date</th>
                   <th className="text-left p-1.5">Événement</th>
                   <th className="text-right p-1.5">Impact</th>
+                  <th className="text-right p-1.5">Frais perf.</th>
                   <th className="text-right p-1.5">Solde après</th>
                 </tr>
               </thead>
@@ -106,6 +105,7 @@ export default async function ClientView() {
                         <td className="p-1.5 text-muted">{e.date.toLocaleString("fr-FR")}</td>
                         <td className="p-1.5 text-blue">Dépôt</td>
                         <td className="p-1.5 text-right text-green">+{fmt(e.amount)}</td>
+                        <td className="p-1.5 text-right text-muted">—</td>
                         <td className="p-1.5 text-right">{fmt(e.balanceAfter)}</td>
                       </tr>
                     );
@@ -116,6 +116,7 @@ export default async function ClientView() {
                         <td className="p-1.5 text-muted">{e.date.toLocaleString("fr-FR")}</td>
                         <td className="p-1.5 text-gold">Retrait</td>
                         <td className="p-1.5 text-right text-red">-{fmt(e.amount)}</td>
+                        <td className="p-1.5 text-right text-muted">—</td>
                         <td className="p-1.5 text-right">{fmt(e.balanceAfter)}</td>
                       </tr>
                     );
@@ -131,6 +132,7 @@ export default async function ClientView() {
                         {e.gainUsd >= 0 ? "+" : ""}
                         {fmt(e.gainUsd)}
                       </td>
+                      <td className="p-1.5 text-right text-gold">{e.feeUsd > 0.005 ? `-${fmt(e.feeUsd)}` : "—"}</td>
                       <td className="p-1.5 text-right">{fmt(e.balanceAfter)}</td>
                     </tr>
                   );
@@ -138,10 +140,15 @@ export default async function ClientView() {
               </tbody>
             </table>
           </div>
+          <div className="text-xs text-muted mt-3">
+            &quot;Impact&quot; est déjà net des frais de performance (30% des gains, prélevés uniquement au-dessus du
+            plus haut NAV jamais atteint). La colonne &quot;Frais perf.&quot; indique le montant qui t&apos;aurait
+            été attribué en plus si aucun frais n&apos;avait été prélevé sur ce trade.
+          </div>
         </div>
       )}
 
-      <MovementForms gateRemaining={gateRemaining} />
+      <MovementForms />
 
       <div className="card">
         <div className="label-mono mb-3">Mes mouvements</div>
@@ -151,10 +158,7 @@ export default async function ClientView() {
           movements.map((m) => (
             <div key={m.id} className="text-xs py-1.5 border-t border-line first:border-t-0">
               <span className="text-muted">{m.type === "DEPOSIT" ? "Dépôt" : "Retrait"}</span>{" "}
-              {fmt(m.amount.toNumber())}
-              {m.type === "WITHDRAWAL" && m.deferredAmount && m.deferredAmount.toNumber() > 0.01 && (
-                <span className="text-gold"> ({fmt(m.deferredAmount.toNumber())} différé au prochain cycle)</span>
-              )}{" "}
+              {fmt(m.amount.toNumber())}{" "}
               — <span className={m.status === "COMPLETED" ? "text-green" : m.status === "REJECTED" ? "text-red" : "text-gold"}>
                 {STATUS_LABEL[m.status]}
               </span>

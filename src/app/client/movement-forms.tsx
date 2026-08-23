@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { depositAction, withdrawAction } from "./actions";
 
-export function MovementForms({ gateRemaining }: { gateRemaining: number }) {
+export function MovementForms() {
   const [depositState, depositFormAction, depositPending] = useActionState(depositAction, {
     error: null,
   });
@@ -36,7 +36,8 @@ export function MovementForms({ gateRemaining }: { gateRemaining: number }) {
           </button>
         </form>
         <div className="text-xs text-muted mt-2">
-          Soumis au gate mensuel. Budget restant : {gateRemaining.toFixed(2)} $
+          Tu peux retirer jusqu&apos;à 100% de ton solde. Passe en attente pendant le délai anti-arbitrage avant
+          l&apos;envoi effectif.
         </div>
       </div>
     </div>

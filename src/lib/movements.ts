@@ -2,7 +2,6 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { MovementStatus, MovementType, Prisma, Role } from "@prisma/client";
 import { prisma } from "./prisma";
 import { computeNav, d } from "./nav";
-import { computeGateRemaining, splitWithdrawal } from "./gate";
 import { PENDING_MOVEMENT_DELAY_HOURS } from "./constants";
 import { logAudit } from "./audit";
 
@@ -16,7 +15,7 @@ function eligibleAtFromNow() {
  * courses entre dépôts/retraits/trades concurrents sur le même pool). */
 async function lockPoolState(tx: Prisma.TransactionClient) {
   const rows = await tx.$queryRaw<
-    { id: number; totalAssets: Decimal; totalParts: Decimal; gateUsedThisPeriod: Decimal; highWaterMark: Decimal }[]
+    { id: number; totalAssets: Decimal; totalParts: Decimal; highWaterMark: Decimal }[]
   >`SELECT * FROM pool_state WHERE id = 1 FOR UPDATE`;
   if (!rows[0]) throw new MovementError("pool_state introuvable");
   return rows[0];
@@ -155,6 +154,13 @@ export async function rejectDeposit(movementId: string, managerId: string, reaso
   });
 }
 
+/**
+ * Retrait sans plafond : le client peut retirer jusqu'à 100% de son solde
+ * en une fois (pas de gate mensuel). Le NAV reste figé au moment de la
+ * demande, et les parts/l'AUM sont déduits immédiatement — le délai
+ * anti-arbitrage (PENDING_MOVEMENT_DELAY_HOURS) s'applique toujours avant
+ * que le gestionnaire puisse marquer le retrait comme envoyé.
+ */
 export async function requestWithdrawal(
   clientId: string,
   amountOrAll: Decimal | "all"
@@ -168,33 +174,26 @@ export async function requestWithdrawal(
     }
 
     const navAtRequest = computeNav(pool.totalAssets, pool.totalParts);
+    const maxValue = clientParts.times(navAtRequest);
     const requestedAmount =
-      amountOrAll === "all" ? clientParts.times(navAtRequest) : amountOrAll;
+      amountOrAll === "all" ? maxValue : amountOrAll;
     if (requestedAmount.lessThanOrEqualTo(0)) throw new MovementError("Montant invalide");
 
-    const gateRemaining = computeGateRemaining(pool.totalAssets, pool.gateUsedThisPeriod);
-    const split = splitWithdrawal({
-      requestedAmount,
-      clientParts,
-      navAtRequest,
-      gateRemaining,
-    });
+    // Ne peut jamais retirer plus que ce qu'il possède réellement.
+    const valueRequested = Decimal.min(requestedAmount, maxValue);
+    const partsRequested = valueRequested.dividedBy(navAtRequest);
 
-    const newClientParts = clientParts.minus(split.grantedParts);
+    const newClientParts = clientParts.minus(partsRequested);
     await tx.clientHolding.update({
       where: { clientId },
       data: { parts: newClientParts },
     });
 
-    const newTotalAssets = d(pool.totalAssets).minus(split.grantedValue);
-    const newTotalParts = d(pool.totalParts).minus(split.grantedParts);
+    const newTotalAssets = d(pool.totalAssets).minus(valueRequested);
+    const newTotalParts = d(pool.totalParts).minus(partsRequested);
     await tx.poolState.update({
       where: { id: 1 },
-      data: {
-        totalAssets: newTotalAssets,
-        totalParts: newTotalParts,
-        gateUsedThisPeriod: d(pool.gateUsedThisPeriod).plus(split.grantedValue),
-      },
+      data: { totalAssets: newTotalAssets, totalParts: newTotalParts },
     });
 
     await tx.navSnapshot.create({
@@ -210,9 +209,8 @@ export async function requestWithdrawal(
       data: {
         clientId,
         type: MovementType.WITHDRAWAL,
-        amount: split.valueRequested,
-        grantedAmount: split.grantedValue,
-        deferredAmount: split.deferredValue,
+        amount: valueRequested,
+        grantedAmount: valueRequested,
         navAtRequest,
         status: MovementStatus.PENDING_EXECUTION,
         eligibleAt: eligibleAtFromNow(),
@@ -226,9 +224,7 @@ export async function requestWithdrawal(
       entityType: "PendingMovement",
       entityId: movement.id,
       details: {
-        valueRequested: split.valueRequested.toString(),
-        grantedValue: split.grantedValue.toString(),
-        deferredValue: split.deferredValue.toString(),
+        valueRequested: valueRequested.toString(),
         navAtRequest: navAtRequest.toString(),
       },
     });
@@ -293,7 +289,7 @@ export async function rejectWithdrawal(
       throw new MovementError("Ce retrait n'est plus en attente d'exécution");
     }
 
-    const pool = await lockPoolState(tx);
+    await lockPoolState(tx);
     const grantedValue = d(movement.grantedAmount ?? 0);
     const navAtRequest = d(movement.navAtRequest);
     const grantedParts = grantedValue.dividedBy(navAtRequest);
@@ -308,7 +304,6 @@ export async function rejectWithdrawal(
         data: {
           totalAssets: { increment: grantedValue },
           totalParts: { increment: grantedParts },
-          gateUsedThisPeriod: d(pool.gateUsedThisPeriod).minus(grantedValue),
         },
       });
     }

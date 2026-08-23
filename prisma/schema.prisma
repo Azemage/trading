@@ -79,8 +79,6 @@ model PoolState {
   totalAssets         Decimal  @default(0) @db.Decimal(24, 8)
   totalParts          Decimal  @default(0) @db.Decimal(24, 8)
   cashBuffer          Decimal  @default(0) @db.Decimal(24, 8)
-  gateUsedThisPeriod  Decimal  @default(0) @db.Decimal(24, 8)
-  gatePeriodStart     DateTime @default(now())
   highWaterMark       Decimal  @default(1) @db.Decimal(24, 8)
   updatedAt           DateTime @updatedAt
 
@@ -140,8 +138,7 @@ model PendingMovement {
   client          User           @relation("ClientMovements", fields: [clientId], references: [id])
   type            MovementType
   amount          Decimal        @db.Decimal(24, 8) // montant demandé
-  grantedAmount   Decimal?       @db.Decimal(24, 8) // retrait : part accordée immédiatement (soumise au gate)
-  deferredAmount  Decimal?       @db.Decimal(24, 8) // retrait : part différée au prochain cycle de gate
+  grantedAmount   Decimal?       @db.Decimal(24, 8) // retrait : montant accordé (toujours égal à amount — pas de plafond)
   status          MovementStatus @default(PENDING_CONFIRMATION)
   navAtRequest    Decimal        @db.Decimal(24, 8) // NAV figé au moment de la demande — jamais recalculé à l'approbation
   requestedAt     DateTime       @default(now())

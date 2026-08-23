@@ -167,22 +167,3 @@ export async function adjustPoolAssets(params: {
     return { navBefore, navAfter };
   });
 }
-
-/** Ouvre une nouvelle période de gate (remise à zéro du compteur mensuel). */
-export async function resetGatePeriod(managerId: string) {
-  return prisma.$transaction(async (tx) => {
-    await tx.poolState.update({
-      where: { id: 1 },
-      data: { gateUsedThisPeriod: 0, gatePeriodStart: new Date() },
-    });
-    await tx.auditLog.create({
-      data: {
-        actorId: managerId,
-        actorRole: Role.MANAGER,
-        action: "gate.period_reset",
-        entityType: "PoolState",
-        entityId: "1",
-      },
-    });
-  });
-}

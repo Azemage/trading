@@ -28,8 +28,6 @@ export async function resetAllTestData(managerId: string) {
         totalAssets: 0,
         totalParts: 0,
         cashBuffer: 0,
-        gateUsedThisPeriod: 0,
-        gatePeriodStart: new Date(),
         highWaterMark: 1,
       },
     });

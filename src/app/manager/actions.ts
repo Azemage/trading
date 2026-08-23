@@ -9,7 +9,7 @@ import {
   rejectDeposit,
   rejectWithdrawal,
 } from "@/lib/movements";
-import { adjustPoolAssets, logManualTrade, resetGatePeriod } from "@/lib/trades";
+import { adjustPoolAssets, logManualTrade } from "@/lib/trades";
 import { ALLOWED_LEVERAGES, computePositionPnlPct } from "@/lib/position";
 import { createTestClient } from "@/lib/test-clients";
 import { resetAllTestData } from "@/lib/admin-reset";
@@ -192,10 +192,4 @@ export async function resetAllTestDataAction(
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Erreur inconnue" };
   }
-}
-
-export async function resetGateAction() {
-  const manager = await requireManager();
-  await resetGatePeriod(manager.id);
-  revalidatePath("/manager");
 }

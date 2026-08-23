@@ -6,7 +6,7 @@ import { auth } from "@/auth";
 import { requestDeposit, requestWithdrawal } from "@/lib/movements";
 import { submitKyc, KycError } from "@/lib/kyc";
 import { updateUsdcAddress, AccountError } from "@/lib/account";
-import { notifyManagers, emailTemplates } from "@/lib/email";
+import { notifyManagers, emailTemplates, type EmailAttachment } from "@/lib/email";
 import type { UsdcNetworkValue } from "@/lib/usdc";
 
 async function requireClient() {
@@ -84,7 +84,17 @@ export async function submitKycAction(
       idFront,
       idBack,
     });
-    await notifyManagers("Nouvelle soumission KYC", emailTemplates.managerNewKyc(user.name ?? ""));
+
+    const extFromMime = (mime: string) => (mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : "jpg");
+    const attachments: EmailAttachment[] = [];
+    if (idFront) attachments.push({ filename: `recto.${extFromMime(idFront.mimeType)}`, content: idFront.data });
+    if (idBack) attachments.push({ filename: `verso.${extFromMime(idBack.mimeType)}`, content: idBack.data });
+
+    await notifyManagers(
+      "Nouvelle soumission KYC",
+      emailTemplates.managerNewKyc(user.name ?? "", attachments.length > 0),
+      attachments.length > 0 ? attachments : undefined
+    );
     revalidatePath("/client");
     return { error: null };
   } catch (e) {

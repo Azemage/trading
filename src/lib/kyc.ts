@@ -103,6 +103,9 @@ export async function reviewKyc(params: {
       throw new KycError("Cette soumission n'est plus en attente de revue");
     }
 
+    // Les photos ont déjà été envoyées par email au moment de la soumission
+    // (voir submitKycAction) — une fois la revue faite, elles sont effacées
+    // de la base pour ne pas garder de copie permanente ici.
     const updated = await tx.kycSubmission.update({
       where: { id: params.submissionId },
       data: {
@@ -110,6 +113,10 @@ export async function reviewKyc(params: {
         reviewedAt: new Date(),
         reviewedById: params.managerId,
         rejectionReason: params.approve ? undefined : params.reason,
+        idFrontImage: null,
+        idFrontMimeType: null,
+        idBackImage: null,
+        idBackMimeType: null,
       },
     });
 

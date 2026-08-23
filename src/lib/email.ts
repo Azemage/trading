@@ -9,30 +9,49 @@ function getClient() {
   return new Resend(apiKey);
 }
 
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+}
+
 /**
  * Envoie un email via Resend si RESEND_API_KEY est configurée, sinon logge
  * le contenu en console (dev sans clé) — ne fait jamais échouer l'action
  * appelante : une notification manquée ne doit jamais bloquer un dépôt,
  * un retrait ou une revue KYC.
  */
-export async function sendEmail(params: { to: string; subject: string; html: string }) {
+export async function sendEmail(params: {
+  to: string;
+  subject: string;
+  html: string;
+  attachments?: EmailAttachment[];
+}) {
   const client = getClient();
   if (!client) {
-    console.log(`[email:dev] À: ${params.to} — Objet: ${params.subject}\n${params.html}\n`);
+    const attachmentNote = params.attachments?.length
+      ? ` (+ ${params.attachments.length} pièce(s) jointe(s) : ${params.attachments.map((a) => a.filename).join(", ")})`
+      : "";
+    console.log(`[email:dev] À: ${params.to} — Objet: ${params.subject}${attachmentNote}\n${params.html}\n`);
     return;
   }
 
   try {
-    await client.emails.send({ from: FROM, to: params.to, subject: params.subject, html: params.html });
+    await client.emails.send({
+      from: FROM,
+      to: params.to,
+      subject: params.subject,
+      html: params.html,
+      attachments: params.attachments?.map((a) => ({ filename: a.filename, content: a.content })),
+    });
   } catch (e) {
     console.error("[email] Échec d'envoi (non bloquant) :", e);
   }
 }
 
-/** Envoie le même email à tous les comptes gestionnaire. */
-export async function notifyManagers(subject: string, html: string) {
+/** Envoie le même email (avec pièces jointes éventuelles) à tous les comptes gestionnaire. */
+export async function notifyManagers(subject: string, html: string, attachments?: EmailAttachment[]) {
   const managers = await prisma.user.findMany({ where: { role: "MANAGER" }, select: { email: true } });
-  await Promise.all(managers.map((m) => sendEmail({ to: m.email, subject, html })));
+  await Promise.all(managers.map((m) => sendEmail({ to: m.email, subject, html, attachments })));
 }
 
 function layout(title: string, bodyHtml: string) {
@@ -88,9 +107,11 @@ export const emailTemplates = {
       "Nouvelle demande de retrait",
       `<p>${clientName} a demandé un retrait de <strong>${fmtUsd(amount)}</strong>. À traiter dans l'espace gestionnaire.</p>`
     ),
-  managerNewKyc: (clientName: string) =>
+  managerNewKyc: (clientName: string, hasPhotos: boolean) =>
     layout(
       "Nouvelle soumission KYC",
-      `<p>${clientName} a soumis ses documents KYC. À revoir dans l'espace gestionnaire.</p>`
+      `<p>${clientName} a soumis ses documents KYC. À revoir dans l'espace gestionnaire.</p>${
+        hasPhotos ? "<p>Les photos recto/verso sont jointes à cet email.</p>" : ""
+      }`
     ),
 };

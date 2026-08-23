@@ -144,4 +144,44 @@ describe("KYC — revue manuelle", () => {
       })
     ).rejects.toThrow(/volumineux/);
   });
+
+  it("efface les photos de la base une fois la soumission approuvée", async () => {
+    const client = await makeClient("kycphoto4@test.local");
+    const manager = await makeManager("mgrkyc5@test.local");
+    const sub = await submitKyc({
+      clientId: client.id,
+      legalName: "Jean Dupont",
+      documentType: "Passeport",
+      documentNumber: "AB123456",
+      idFront: { data: Buffer.from([0xff, 0xd8, 0xff]), mimeType: "image/jpeg" },
+      idBack: { data: Buffer.from([0x89, 0x50, 0x4e, 0x47]), mimeType: "image/png" },
+    });
+
+    await reviewKyc({ submissionId: sub.id, approve: true, managerId: manager.id });
+
+    const stored = await prisma.kycSubmission.findUniqueOrThrow({ where: { id: sub.id } });
+    expect(stored.idFrontImage).toBeNull();
+    expect(stored.idBackImage).toBeNull();
+    expect(stored.idFrontMimeType).toBeNull();
+    expect(stored.idBackMimeType).toBeNull();
+    // Le reste de la soumission (traçabilité) reste intact.
+    expect(stored.status).toBe("APPROVED");
+  });
+
+  it("efface aussi les photos après un rejet", async () => {
+    const client = await makeClient("kycphoto5@test.local");
+    const manager = await makeManager("mgrkyc6@test.local");
+    const sub = await submitKyc({
+      clientId: client.id,
+      legalName: "Jean Dupont",
+      documentType: "Passeport",
+      documentNumber: "AB123456",
+      idFront: { data: Buffer.from([0xff, 0xd8, 0xff]), mimeType: "image/jpeg" },
+    });
+
+    await reviewKyc({ submissionId: sub.id, approve: false, reason: "Document illisible", managerId: manager.id });
+
+    const stored = await prisma.kycSubmission.findUniqueOrThrow({ where: { id: sub.id } });
+    expect(stored.idFrontImage).toBeNull();
+  });
 });

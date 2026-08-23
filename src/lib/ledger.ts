@@ -72,58 +72,101 @@ export async function buildManagerLedger(limit = 100): Promise<ManagerLedgerEntr
   return entries.slice(0, limit);
 }
 
-export interface ClientTradeRow {
-  date: Date;
-  pair: string | null;
-  pnlPct: number;
-  balanceBefore: number;
-  balanceAfter: number;
-  gainUsd: number;
-  cumulativeGainUsd: number;
-}
+export type ClientLedgerEntry =
+  | { kind: "DEPOSIT"; date: Date; amount: number; balanceBefore: number; balanceAfter: number }
+  | { kind: "WITHDRAWAL"; date: Date; amount: number; balanceBefore: number; balanceAfter: number }
+  | {
+      kind: "TRADE";
+      date: Date;
+      pnlPct: number;
+      pair: string | null;
+      gainUsd: number;
+      balanceBefore: number;
+      balanceAfter: number;
+    };
 
 /**
- * Historique de trades vu depuis la perspective d'un client, à parts
- * constantes (ses parts actuelles appliquées rétroactivement depuis sa
- * date d'entrée). Simplification assumée : si le client a fait un retrait
- * partiel entre-temps, les montants avant cette date restent approximatifs.
+ * Historique complet et chronologique d'un client : ses dépôts/retraits
+ * réalisés, entrelacés avec tous les trades du pool depuis son entrée,
+ * chacun avec l'impact exact sur SON solde.
+ *
+ * Le calcul est exact (pas une approximation) : chaque trade fait évoluer
+ * le solde du client par le même ratio NAV_après/NAV_avant que pour le
+ * pool entier (ses parts ne changent pas pendant un trade), et chaque
+ * dépôt/retrait ajoute/retranche exactement le montant réel — donc même
+ * un retrait partiel entre deux trades reste correctement reflété.
  */
-export async function buildClientTradeLedger(params: { clientId: string; currentParts: number }) {
-  const firstDeposit = await prisma.pendingMovement.findFirst({
-    where: { clientId: params.clientId, type: "DEPOSIT", status: "COMPLETED" },
-    orderBy: { processedAt: "asc" },
-  });
-  const joinDate = firstDeposit?.processedAt ?? null;
+export async function buildClientLedger(clientId: string) {
+  const [deposits, withdrawals] = await Promise.all([
+    prisma.pendingMovement.findMany({
+      where: { clientId, type: "DEPOSIT", status: "COMPLETED" },
+      orderBy: { processedAt: "asc" },
+    }),
+    prisma.pendingMovement.findMany({
+      where: { clientId, type: "WITHDRAWAL", status: "COMPLETED" },
+      orderBy: { processedAt: "asc" },
+    }),
+  ]);
 
-  const totalDepositedAgg = await prisma.pendingMovement.aggregate({
-    where: { clientId: params.clientId, type: "DEPOSIT", status: "COMPLETED" },
-    _sum: { amount: true },
-  });
-  const totalDeposited = totalDepositedAgg._sum.amount?.toNumber() ?? 0;
-
-  if (!joinDate) return { joinDate: null, totalDeposited, rows: [] as ClientTradeRow[] };
+  const firstDeposit = deposits[0];
+  if (!firstDeposit?.processedAt) {
+    return { joinDate: null as Date | null, totalDeposited: 0, entries: [] as ClientLedgerEntry[] };
+  }
+  const joinDate = firstDeposit.processedAt;
+  const totalDeposited = deposits.reduce((s, d) => s + d.amount.toNumber(), 0);
 
   const trades = await prisma.trade.findMany({
     where: { timestamp: { gte: joinDate } },
     orderBy: { timestamp: "asc" },
   });
 
-  let cumulative = 0;
-  const rows: ClientTradeRow[] = trades.map((t) => {
-    const balanceBefore = params.currentParts * t.navBefore.toNumber();
-    const balanceAfter = params.currentParts * t.navAfter.toNumber();
-    const gainUsd = balanceAfter - balanceBefore;
-    cumulative += gainUsd;
-    return {
+  type RawEvent =
+    | { date: Date; kind: "DEPOSIT"; amount: number }
+    | { date: Date; kind: "WITHDRAWAL"; amount: number }
+    | { date: Date; kind: "TRADE"; navBefore: number; navAfter: number; pnlPct: number; pair: string | null };
+
+  const raw: RawEvent[] = [
+    ...deposits.map((d) => ({ date: d.processedAt!, kind: "DEPOSIT" as const, amount: d.amount.toNumber() })),
+    ...withdrawals
+      .filter((w) => w.processedAt)
+      .map((w) => ({
+        date: w.processedAt!,
+        kind: "WITHDRAWAL" as const,
+        amount: w.grantedAmount?.toNumber() ?? 0,
+      })),
+    ...trades.map((t) => ({
       date: t.timestamp,
-      pair: t.pair,
+      kind: "TRADE" as const,
+      navBefore: t.navBefore.toNumber(),
+      navAfter: t.navAfter.toNumber(),
       pnlPct: t.pnlPct.toNumber(),
+      pair: t.pair,
+    })),
+  ];
+  raw.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  let balance = 0;
+  const entries: ClientLedgerEntry[] = raw.map((r) => {
+    const balanceBefore = balance;
+    if (r.kind === "DEPOSIT") {
+      balance = balanceBefore + r.amount;
+      return { kind: "DEPOSIT", date: r.date, amount: r.amount, balanceBefore, balanceAfter: balance };
+    }
+    if (r.kind === "WITHDRAWAL") {
+      balance = balanceBefore - r.amount;
+      return { kind: "WITHDRAWAL", date: r.date, amount: r.amount, balanceBefore, balanceAfter: balance };
+    }
+    balance = r.navBefore > 0 ? balanceBefore * (r.navAfter / r.navBefore) : balanceBefore;
+    return {
+      kind: "TRADE",
+      date: r.date,
+      pnlPct: r.pnlPct,
+      pair: r.pair,
+      gainUsd: balance - balanceBefore,
       balanceBefore,
-      balanceAfter,
-      gainUsd,
-      cumulativeGainUsd: cumulative,
+      balanceAfter: balance,
     };
   });
 
-  return { joinDate, totalDeposited, rows };
+  return { joinDate, totalDeposited, entries };
 }

@@ -12,6 +12,7 @@ import {
 import { adjustPoolAssets, logManualTrade, resetGatePeriod } from "@/lib/trades";
 import { ALLOWED_LEVERAGES, computePositionPnlPct } from "@/lib/position";
 import { createTestClient } from "@/lib/test-clients";
+import { resetAllTestData } from "@/lib/admin-reset";
 import type { TradeDirection } from "@prisma/client";
 
 async function requireManager() {
@@ -169,6 +170,27 @@ export async function createTestClientAction(
     return { error: null, created: { email: email.toLowerCase(), password } };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Erreur inconnue", created: null };
+  }
+}
+
+export async function resetAllTestDataAction(
+  _prevState: { error: string | null },
+  formData: FormData
+): Promise<{ error: string | null }> {
+  try {
+    const manager = await requireManager();
+    const confirmation = String(formData.get("confirm") ?? "");
+    if (confirmation !== "RESET") {
+      return { error: 'Tape exactement "RESET" pour confirmer' };
+    }
+
+    await resetAllTestData(manager.id);
+    revalidatePath("/manager");
+    revalidatePath("/client");
+    revalidatePath("/");
+    return { error: null };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erreur inconnue" };
   }
 }
 

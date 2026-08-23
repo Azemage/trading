@@ -13,6 +13,7 @@ import {
 import { TradeForm } from "./trade-form";
 import { PoolAdjustForm } from "./pool-adjust-form";
 import { CreateTestClientForm } from "./create-test-client-form";
+import { ResetTestDataForm } from "./reset-test-data-form";
 import { buildManagerLedger } from "@/lib/ledger";
 
 function fmt(n: number) {
@@ -101,6 +102,15 @@ export default async function ManagerView() {
             aussi le high-water mark à ce niveau (sinon le prochain trade facturerait rétroactivement l&apos;écart
             créé par cet ajustement). À ne pas utiliser en production réelle — chaque usage est tracé dans le
             journal d&apos;audit avec le motif saisi.
+          </div>
+        </div>
+
+        <div className="border-t border-line pt-4">
+          <div className="text-xs text-gold mb-2">Tout réinitialiser</div>
+          <ResetTestDataForm />
+          <div className="text-xs text-muted mt-2">
+            Efface définitivement tous les clients, dépôts, retraits, trades et frais, et remet le pool à zéro (AUM
+            0$, NAV 1). Ton compte gestionnaire est conservé. Irréversible — à utiliser uniquement en développement.
           </div>
         </div>
       </div>

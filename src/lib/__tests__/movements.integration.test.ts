@@ -223,13 +223,24 @@ describe("mouvements — cas limites critiques (argent de tiers)", () => {
     expect(trade.navAfter.greaterThan(trade.navBefore)).toBe(true);
   });
 
+  it("bloque un dépôt tant que le KYC n'est pas vérifié", async () => {
+    const client = await prisma.user.create({
+      data: { email: "nokycdep@test.local", passwordHash: "x", name: "No Kyc Dep", role: "CLIENT" },
+    });
+
+    await expect(requestDeposit(client.id, new Decimal(1000))).rejects.toThrow(/KYC/);
+  });
+
   it("bloque un retrait tant que le KYC n'est pas vérifié", async () => {
+    // Financé pendant que le KYC est vérifié, puis rejeté ensuite — pour isoler
+    // le garde-fou du retrait de celui du dépôt (testé séparément ci-dessus).
     const client = await prisma.user.create({
       data: {
         email: "nokyc@test.local",
         passwordHash: "x",
         name: "No Kyc",
         role: "CLIENT",
+        kycStatus: "VERIFIED",
         usdcNetwork: "ETHEREUM",
         usdcAddress: "0x" + "b".repeat(40),
       },
@@ -239,6 +250,8 @@ describe("mouvements — cas limites critiques (argent de tiers)", () => {
     const dep = await requestDeposit(client.id, new Decimal(1000));
     await makeEligible(dep.id);
     await approveDeposit(dep.id, manager.id);
+
+    await prisma.user.update({ where: { id: client.id }, data: { kycStatus: "PENDING" } });
 
     await expect(requestWithdrawal(client.id, new Decimal(100))).rejects.toThrow(/KYC/);
   });

@@ -190,7 +190,7 @@ export default async function ClientView() {
         </div>
       </div>
 
-      <MovementForms />
+      <MovementForms kycVerified={me.kycStatus === "VERIFIED"} maxWithdrawable={confirmedBalance} />
 
       <div className="card">
         <div className="label-mono mb-3">Mes mouvements</div>

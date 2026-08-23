@@ -31,6 +31,12 @@ async function lockClientHolding(tx: Prisma.TransactionClient, clientId: string)
 export async function requestDeposit(clientId: string, amount: Decimal) {
   if (amount.lessThanOrEqualTo(0)) throw new MovementError("Montant invalide");
 
+  const client = await prisma.user.findUnique({ where: { id: clientId }, select: { kycStatus: true } });
+  if (!client) throw new MovementError("Client introuvable");
+  if (client.kycStatus !== "VERIFIED") {
+    throw new MovementError("Vérification KYC requise avant de faire un dépôt");
+  }
+
   return prisma.$transaction(async (tx) => {
     const pool = await lockPoolState(tx);
     const nav = computeNav(pool.totalAssets, pool.totalParts);

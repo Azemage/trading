@@ -2,6 +2,7 @@
 
 import { registerClient, registerSchema, RegisterError } from "@/lib/register";
 import { signIn } from "@/auth";
+import { sendEmail, emailTemplates } from "@/lib/email";
 
 export async function registerAction(
   _prevState: { error: string | null },
@@ -25,6 +26,12 @@ export async function registerAction(
     if (e instanceof RegisterError) return { error: e.message };
     throw e;
   }
+
+  await sendEmail({
+    to: parsed.data.email.trim().toLowerCase(),
+    subject: "Bienvenue chez Ledger Capital",
+    html: emailTemplates.welcomeRegistration(parsed.data.name),
+  });
 
   await signIn("credentials", {
     email: parsed.data.email.trim().toLowerCase(),

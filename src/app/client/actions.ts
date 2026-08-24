@@ -6,7 +6,7 @@ import { auth } from "@/auth";
 import { requestDeposit, requestWithdrawal } from "@/lib/movements";
 import { submitKyc, KycError } from "@/lib/kyc";
 import { updateUsdcAddress, AccountError } from "@/lib/account";
-import { notifyManagers, emailTemplates, type EmailAttachment } from "@/lib/email";
+import { sendEmail, notifyManagers, emailTemplates, type EmailAttachment } from "@/lib/email";
 import type { UsdcNetworkValue } from "@/lib/usdc";
 
 async function requireClient() {
@@ -28,6 +28,11 @@ export async function depositAction(
 
     await requestDeposit(user.id, new Decimal(amount));
     await notifyManagers("Nouvelle demande de dépôt", emailTemplates.managerNewDeposit(user.name ?? "", amount));
+    await sendEmail({
+      to: user.email ?? "",
+      subject: "Demande de dépôt reçue",
+      html: emailTemplates.depositSubmittedConfirmation(user.name ?? "", amount),
+    });
     revalidatePath("/client");
     return { error: null };
   } catch (e) {
@@ -50,6 +55,11 @@ export async function withdrawAction(
       "Nouvelle demande de retrait",
       emailTemplates.managerNewWithdrawal(user.name ?? "", movement.amount.toNumber())
     );
+    await sendEmail({
+      to: user.email ?? "",
+      subject: "Demande de retrait reçue",
+      html: emailTemplates.withdrawalSubmittedConfirmation(user.name ?? "", movement.amount.toNumber()),
+    });
     revalidatePath("/client");
     return { error: null };
   } catch (e) {
@@ -95,6 +105,11 @@ export async function submitKycAction(
       emailTemplates.managerNewKyc(user.name ?? "", attachments.length > 0),
       attachments.length > 0 ? attachments : undefined
     );
+    await sendEmail({
+      to: user.email ?? "",
+      subject: "KYC reçu",
+      html: emailTemplates.kycSubmittedConfirmation(user.name ?? ""),
+    });
     revalidatePath("/client");
     return { error: null };
   } catch (e) {

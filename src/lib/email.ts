@@ -67,6 +67,26 @@ function fmtUsd(n: number) {
 }
 
 export const emailTemplates = {
+  welcomeRegistration: (clientName: string) =>
+    layout(
+      "Bienvenue chez Ledger Capital",
+      `<p>Bonjour ${clientName},</p><p>Ton compte a bien été créé. Avant de pouvoir effectuer un premier dépôt, complète ta vérification KYC depuis ton espace client.</p>`
+    ),
+  kycSubmittedConfirmation: (clientName: string) =>
+    layout(
+      "KYC reçu",
+      `<p>Bonjour ${clientName},</p><p>Ta soumission KYC a bien été reçue et est en attente de revue par un gestionnaire. Tu seras notifié dès qu'elle sera traitée.</p>`
+    ),
+  depositSubmittedConfirmation: (clientName: string, amount: number) =>
+    layout(
+      "Demande de dépôt reçue",
+      `<p>Bonjour ${clientName},</p><p>Ta demande de dépôt de <strong>${fmtUsd(amount)}</strong> a bien été reçue et est en attente de confirmation par un gestionnaire.</p>`
+    ),
+  withdrawalSubmittedConfirmation: (clientName: string, amount: number) =>
+    layout(
+      "Demande de retrait reçue",
+      `<p>Bonjour ${clientName},</p><p>Ta demande de retrait de <strong>${fmtUsd(amount)}</strong> a bien été reçue et est en cours de traitement par un gestionnaire.</p>`
+    ),
   depositApproved: (clientName: string, amount: number) =>
     layout(
       "Dépôt confirmé",

@@ -55,6 +55,46 @@ describe("applyTradeResult — performance fee au high-water mark", () => {
     expect(r.totalAssetsAfterNet.toString()).toBe("1056");
   });
 
+  it("déduit les frais de trading avant de calculer la performance fee", () => {
+    // +10% brut => 1100, mais 20$ de frais de trading déduits d'abord => 1080 net de trading.
+    // Gain facturable au-dessus du HWM=1 : (1080-1000)=80 ; fee = 30% => 24.
+    const r = applyTradeResult({
+      totalAssetsBefore: 1000,
+      totalParts: 1000,
+      pnlPct: 10,
+      highWaterMark: 1,
+      tradingFeeUsd: 20,
+    });
+    expect(r.tradingFeeUsd.toString()).toBe("20");
+    expect(r.totalAssetsAfterGross.toString()).toBe("1080");
+    expect(r.fee.toString()).toBe("24");
+    expect(r.totalAssetsAfterNet.toString()).toBe("1056");
+  });
+
+  it("les frais de trading peuvent annuler entièrement la performance fee", () => {
+    // +10% brut => 1100, mais 100$ de frais de trading => 1000 net, pile le HWM : aucune perf fee.
+    const r = applyTradeResult({
+      totalAssetsBefore: 1000,
+      totalParts: 1000,
+      pnlPct: 10,
+      highWaterMark: 1,
+      tradingFeeUsd: 100,
+    });
+    expect(r.fee.toString()).toBe("0");
+    expect(r.totalAssetsAfterNet.toString()).toBe("1000");
+  });
+
+  it("sans frais de trading précisés, le comportement est inchangé (0 par défaut)", () => {
+    const r = applyTradeResult({
+      totalAssetsBefore: 1000,
+      totalParts: 1000,
+      pnlPct: 10,
+      highWaterMark: 1,
+    });
+    expect(r.tradingFeeUsd.toString()).toBe("0");
+    expect(r.fee.toString()).toBe("30");
+  });
+
   it("ne divise jamais par zéro si le pool est encore vide", () => {
     const r = applyTradeResult({
       totalAssetsBefore: 0,

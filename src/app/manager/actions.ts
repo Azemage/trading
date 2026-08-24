@@ -90,6 +90,12 @@ export async function logTradeAction(
     const note = String(formData.get("note") ?? "");
     const mode = String(formData.get("mode") ?? "simple");
 
+    const tradingFeeRaw = String(formData.get("tradingFeeUsd") ?? "").trim();
+    const tradingFeeUsd = tradingFeeRaw ? Number(tradingFeeRaw) : 0;
+    if (Number.isNaN(tradingFeeUsd) || tradingFeeUsd < 0) {
+      return { error: "Frais de trading invalides" };
+    }
+
     if (mode === "position") {
       const pair = String(formData.get("pair") ?? "").trim();
       const direction = String(formData.get("direction") ?? "LONG") as TradeDirection;
@@ -124,6 +130,7 @@ export async function logTradeAction(
         pnlPct: pnlPctOfAum,
         note: note || undefined,
         loggedById: manager.id,
+        tradingFeeUsd: new Decimal(tradingFeeUsd),
         position: {
           pair,
           direction,
@@ -136,7 +143,12 @@ export async function logTradeAction(
     } else {
       const pnlPct = Number(formData.get("pnlPct"));
       if (Number.isNaN(pnlPct)) return { error: "Résultat invalide" };
-      await logManualTrade({ pnlPct: new Decimal(pnlPct), note: note || undefined, loggedById: manager.id });
+      await logManualTrade({
+        pnlPct: new Decimal(pnlPct),
+        note: note || undefined,
+        loggedById: manager.id,
+        tradingFeeUsd: new Decimal(tradingFeeUsd),
+      });
     }
 
     revalidatePath("/manager");

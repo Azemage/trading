@@ -15,6 +15,7 @@ export async function GET() {
     detail: e.kind === "TRADE" ? (e.pair ?? e.note ?? "") : e.clientName,
     pnlPct: e.kind === "TRADE" ? e.pnlPct : "",
     montant: e.kind === "TRADE" ? e.gainUsd : e.amount,
+    fraisTrading: e.kind === "TRADE" ? e.tradingFeeUsd : "",
     fraisPerf: e.kind === "TRADE" ? e.fee : "",
   }));
 
@@ -24,6 +25,7 @@ export async function GET() {
     { key: "detail", header: "Détail" },
     { key: "pnlPct", header: "Résultat %" },
     { key: "montant", header: "Montant $" },
+    { key: "fraisTrading", header: "Frais trading $" },
     { key: "fraisPerf", header: "Frais perf. $" },
   ]);
 

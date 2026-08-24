@@ -25,7 +25,7 @@ export async function GET() {
     { key: "detail", header: "Détail" },
     { key: "pnlPct", header: "Résultat %" },
     { key: "impact", header: "Impact $" },
-    { key: "fraisPerf", header: "Frais perf. $" },
+    { key: "fraisPerf", header: "Frais $" },
     { key: "soldeApres", header: "Solde après $" },
   ]);
 

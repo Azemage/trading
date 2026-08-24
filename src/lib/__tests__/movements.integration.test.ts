@@ -223,6 +223,39 @@ describe("mouvements — cas limites critiques (argent de tiers)", () => {
     expect(trade.navAfter.greaterThan(trade.navBefore)).toBe(true);
   });
 
+  it("déduit les frais de trading avant la performance fee et les trace dans le fee ledger", async () => {
+    const client = await makeClient("tradingfee@test.local");
+    const manager = await makeManager("mgr7@test.local");
+
+    const dep = await requestDeposit(client.id, new Decimal(1000));
+    await makeEligible(dep.id);
+    await approveDeposit(dep.id, manager.id); // NAV = 1, HWM = 1
+
+    const trade = await logManualTrade({
+      pnlPct: new Decimal(10), // +10% brut => 1100
+      loggedById: manager.id,
+      tradingFeeUsd: new Decimal(20), // 1080 net de trading => perf fee sur (1080-1000)*30% = 24
+    });
+
+    expect(trade.tradingFeeUsd?.toString()).toBe("20");
+
+    const pool = await prisma.poolState.findUniqueOrThrow({ where: { id: 1 } });
+    expect(pool.totalAssets.toString()).toBe("1056"); // 1080 - 24
+
+    const feeEntries = await prisma.feeLedger.findMany({ where: { tradeId: trade.id } });
+    const tradingEntry = feeEntries.find((f) => f.type === "TRADING");
+    const perfEntry = feeEntries.find((f) => f.type === "PERFORMANCE");
+    expect(tradingEntry?.amount.toString()).toBe("20");
+    expect(perfEntry?.amount.toString()).toBe("24");
+  });
+
+  it("refuse des frais de trading négatifs", async () => {
+    const manager = await makeManager("mgr8@test.local");
+    await expect(
+      logManualTrade({ pnlPct: new Decimal(5), loggedById: manager.id, tradingFeeUsd: new Decimal(-1) })
+    ).rejects.toThrow(/négatifs/);
+  });
+
   it("bloque un dépôt tant que le KYC n'est pas vérifié", async () => {
     const client = await prisma.user.create({
       data: { email: "nokycdep@test.local", passwordHash: "x", name: "No Kyc Dep", role: "CLIENT" },

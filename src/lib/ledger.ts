@@ -9,6 +9,7 @@ export type ManagerLedgerEntry =
       pnlPct: number;
       gainUsd: number;
       fee: number;
+      tradingFeeUsd: number;
       pair: string | null;
       note: string | null;
     };
@@ -55,13 +56,16 @@ export async function buildManagerLedger(limit = 100): Promise<ManagerLedgerEntr
     ...trades.map((t) => {
       const totalParts = t.totalPartsAtTrade.toNumber();
       const gainUsd = (t.navAfter.toNumber() - t.navBefore.toNumber()) * totalParts;
-      const fee = t.feeLedgerEntries.reduce((s, f) => s + f.amount.toNumber(), 0);
+      const fee = t.feeLedgerEntries
+        .filter((f) => f.type === "PERFORMANCE")
+        .reduce((s, f) => s + f.amount.toNumber(), 0);
       return {
         kind: "TRADE" as const,
         date: t.timestamp,
         pnlPct: t.pnlPct.toNumber(),
         gainUsd,
         fee,
+        tradingFeeUsd: t.tradingFeeUsd?.toNumber() ?? 0,
         pair: t.pair,
         note: t.note,
       };

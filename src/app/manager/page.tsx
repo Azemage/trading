@@ -25,7 +25,8 @@ export default async function ManagerView() {
   if (!session?.user) redirect("/login");
   if (session.user.role !== "MANAGER") redirect("/client");
 
-  const [pool, pendingDeposits, pendingWithdrawals, feeAgg, holdings, ledger, pendingKyc] = await Promise.all([
+  const [pool, pendingDeposits, pendingWithdrawals, feeAgg, tradingFeeAgg, holdings, ledger, pendingKyc] =
+    await Promise.all([
     prisma.poolState.findUnique({ where: { id: 1 } }),
     prisma.pendingMovement.findMany({
       where: { type: "DEPOSIT", status: "PENDING_CONFIRMATION" },
@@ -38,6 +39,7 @@ export default async function ManagerView() {
       orderBy: { requestedAt: "asc" },
     }),
     prisma.feeLedger.aggregate({ where: { type: "PERFORMANCE" }, _sum: { amount: true } }),
+    prisma.feeLedger.aggregate({ where: { type: "TRADING" }, _sum: { amount: true } }),
     prisma.clientHolding.findMany({
       where: { parts: { gt: 0 } },
       include: { client: { select: { name: true, email: true } } },
@@ -66,10 +68,14 @@ export default async function ManagerView() {
         </a>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div className="card">
           <div className="label-mono">Revenu perf. fee (cumul)</div>
           <div className="text-xl font-bold text-gold mt-1">{fmt(feeAgg._sum.amount?.toNumber() ?? 0)}</div>
+        </div>
+        <div className="card">
+          <div className="label-mono">Frais trading (cumul)</div>
+          <div className="text-xl font-bold text-red mt-1">{fmt(tradingFeeAgg._sum.amount?.toNumber() ?? 0)}</div>
         </div>
         <div className="card">
           <div className="label-mono">Dépôts en attente</div>
@@ -81,7 +87,8 @@ export default async function ManagerView() {
         <div className="label-mono text-gold mb-3">Enregistrer un trade / résultat du jour (saisie manuelle)</div>
         <TradeForm currentTotalAssets={totalAssets} />
         <div className="text-xs text-muted mt-2">
-          Performance fee de 30% prélevée sur les gains au-dessus du high-water mark, aucun frais sinon.
+          Les frais de trading saisis sont déduits avant le calcul du résultat. Performance fee de 30% prélevée
+          ensuite sur les gains (nets des frais de trading) au-dessus du high-water mark, aucun frais sinon.
         </div>
       </div>
 
@@ -288,6 +295,7 @@ export default async function ManagerView() {
                   <th className="text-left p-1.5">Type</th>
                   <th className="text-left p-1.5">Détail</th>
                   <th className="text-right p-1.5">Montant</th>
+                  <th className="text-right p-1.5">Frais trading</th>
                   <th className="text-right p-1.5">Frais perf.</th>
                 </tr>
               </thead>
@@ -301,6 +309,7 @@ export default async function ManagerView() {
                         <td className="p-1.5">{e.clientName}</td>
                         <td className="p-1.5 text-right text-green">+{fmt(e.amount)}</td>
                         <td className="p-1.5 text-right text-muted">—</td>
+                        <td className="p-1.5 text-right text-muted">—</td>
                       </tr>
                     );
                   }
@@ -311,6 +320,7 @@ export default async function ManagerView() {
                         <td className="p-1.5 text-gold">Retrait</td>
                         <td className="p-1.5">{e.clientName}</td>
                         <td className="p-1.5 text-right text-red">-{fmt(e.amount)}</td>
+                        <td className="p-1.5 text-right text-muted">—</td>
                         <td className="p-1.5 text-right text-muted">—</td>
                       </tr>
                     );
@@ -330,6 +340,7 @@ export default async function ManagerView() {
                         {e.gainUsd >= 0 ? "+" : ""}
                         {fmt(e.gainUsd)}
                       </td>
+                      <td className="p-1.5 text-right text-red">{e.tradingFeeUsd > 0 ? fmt(e.tradingFeeUsd) : "—"}</td>
                       <td className="p-1.5 text-right text-gold">{e.fee > 0 ? fmt(e.fee) : "—"}</td>
                     </tr>
                   );

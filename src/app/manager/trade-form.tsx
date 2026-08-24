@@ -9,7 +9,9 @@ function computePreview(
   exitPrice: string,
   positionSizePct: string,
   direction: "LONG" | "SHORT",
-  leverage: number
+  leverage: number,
+  tradingFeeUsd: number,
+  currentTotalAssets: number
 ) {
   const entry = parseFloat(entryPrice);
   const exit = parseFloat(exitPrice);
@@ -20,7 +22,9 @@ function computePreview(
   const priceChangePct = direction === "SHORT" ? -rawChangePct : rawChangePct;
   const marginReturnPct = Math.max(priceChangePct * leverage, -100);
   const pnlPctOfAum = (marginReturnPct * size) / 100;
-  return { priceChangePct, marginReturnPct, pnlPctOfAum };
+  const feePct = currentTotalAssets > 0 ? (tradingFeeUsd / currentTotalAssets) * 100 : 0;
+  const pnlPctOfAumNet = pnlPctOfAum - feePct;
+  return { priceChangePct, marginReturnPct, pnlPctOfAum, pnlPctOfAumNet };
 }
 
 export function TradeForm({ currentTotalAssets }: { currentTotalAssets: number }) {
@@ -32,6 +36,7 @@ export function TradeForm({ currentTotalAssets }: { currentTotalAssets: number }
   const [positionSizeUsd, setPositionSizeUsd] = useState("");
   const [direction, setDirection] = useState<"LONG" | "SHORT">("LONG");
   const [leverage, setLeverage] = useState<number>(1);
+  const [tradingFeeUsd, setTradingFeeUsd] = useState("");
 
   function handleUsdChange(value: string) {
     setPositionSizeUsd(value);
@@ -50,8 +55,17 @@ export function TradeForm({ currentTotalAssets }: { currentTotalAssets: number }
   }
 
   const preview = useMemo(
-    () => computePreview(entryPrice, exitPrice, positionSizePct, direction, leverage),
-    [entryPrice, exitPrice, positionSizePct, direction, leverage]
+    () =>
+      computePreview(
+        entryPrice,
+        exitPrice,
+        positionSizePct,
+        direction,
+        leverage,
+        parseFloat(tradingFeeUsd) || 0,
+        currentTotalAssets
+      ),
+    [entryPrice, exitPrice, positionSizePct, direction, leverage, tradingFeeUsd, currentTotalAssets]
   );
 
   return (
@@ -72,6 +86,24 @@ export function TradeForm({ currentTotalAssets }: { currentTotalAssets: number }
         >
           % direct de l&apos;AUM
         </button>
+      </div>
+
+      <div>
+        <div className="text-xs text-muted mb-1">Frais de trading (plateforme, $)</div>
+        <input
+          name="tradingFeeUsd"
+          type="number"
+          step="any"
+          min="0"
+          placeholder="0"
+          className="w-32"
+          value={tradingFeeUsd}
+          onChange={(e) => setTradingFeeUsd(e.target.value)}
+        />
+        <div className="text-xs text-muted mt-1">
+          Spread, financement, frais d&apos;exécution facturés par la/les plateformes utilisées — déduits avant le
+          calcul du % d&apos;impact sur l&apos;AUM et donc avant la performance fee.
+        </div>
       </div>
 
       {mode === "position" ? (
@@ -190,6 +222,15 @@ export function TradeForm({ currentTotalAssets }: { currentTotalAssets: number }
                   {preview.pnlPctOfAum >= 0 ? "+" : ""}
                   {preview.pnlPctOfAum.toFixed(3)}%
                 </span>
+                {preview.pnlPctOfAumNet !== preview.pnlPctOfAum && (
+                  <>
+                    {" — "}net des frais de trading :{" "}
+                    <span className={preview.pnlPctOfAumNet >= 0 ? "text-green" : "text-red"}>
+                      {preview.pnlPctOfAumNet >= 0 ? "+" : ""}
+                      {preview.pnlPctOfAumNet.toFixed(3)}%
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           )}

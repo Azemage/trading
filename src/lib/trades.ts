@@ -22,6 +22,7 @@ export async function logManualTrade(params: {
   pnlPct: Decimal;
   note?: string;
   loggedById: string;
+  tradingFeeUsd?: Decimal;
   position?: {
     pair: string;
     direction: TradeDirection;
@@ -31,6 +32,10 @@ export async function logManualTrade(params: {
     leverage: Decimal;
   };
 }) {
+  if (params.tradingFeeUsd?.lessThan(0)) {
+    throw new TradeError("Les frais de trading ne peuvent pas être négatifs");
+  }
+
   return prisma.$transaction(async (tx) => {
     const pool = await lockPoolState(tx);
     if (d(pool.totalAssets).lessThanOrEqualTo(0)) {
@@ -42,7 +47,14 @@ export async function logManualTrade(params: {
       totalParts: pool.totalParts,
       pnlPct: params.pnlPct,
       highWaterMark: pool.highWaterMark,
+      tradingFeeUsd: params.tradingFeeUsd,
     });
+
+    if (result.totalAssetsAfterNet.lessThan(0)) {
+      throw new TradeError(
+        "Les frais de trading dépassent la valeur du pool après ce résultat — vérifie le montant saisi"
+      );
+    }
 
     await tx.poolState.update({
       where: { id: 1 },
@@ -67,8 +79,15 @@ export async function logManualTrade(params: {
         exitPrice: params.position?.exitPrice,
         positionSizePct: params.position?.positionSizePct,
         leverage: params.position?.leverage,
+        tradingFeeUsd: result.tradingFeeUsd.greaterThan(0) ? result.tradingFeeUsd : undefined,
       },
     });
+
+    if (result.tradingFeeUsd.greaterThan(0)) {
+      await tx.feeLedger.create({
+        data: { type: FeeType.TRADING, amount: result.tradingFeeUsd, tradeId: trade.id },
+      });
+    }
 
     if (result.fee.greaterThan(0)) {
       await tx.feeLedger.create({
@@ -94,6 +113,7 @@ export async function logManualTrade(params: {
         entityId: trade.id,
         details: {
           pnlPct: params.pnlPct.toString(),
+          tradingFeeUsd: result.tradingFeeUsd.toString(),
           fee: result.fee.toString(),
           navAfter: result.navAfterNet.toString(),
         },

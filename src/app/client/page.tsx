@@ -109,7 +109,7 @@ export default async function ClientView() {
                   <th className="text-left p-1.5">Date</th>
                   <th className="text-left p-1.5">Événement</th>
                   <th className="text-right p-1.5">Impact</th>
-                  <th className="text-right p-1.5">Frais perf.</th>
+                  <th className="text-right p-1.5">Frais</th>
                   <th className="text-right p-1.5">Solde après</th>
                 </tr>
               </thead>
@@ -157,9 +157,10 @@ export default async function ClientView() {
             </table>
           </div>
           <div className="text-xs text-muted mt-3">
-            &quot;Impact&quot; est déjà net des frais de performance (30% des gains, prélevés uniquement au-dessus du
-            plus haut NAV jamais atteint). La colonne &quot;Frais perf.&quot; indique le montant qui t&apos;aurait
-            été attribué en plus si aucun frais n&apos;avait été prélevé sur ce trade.
+            &quot;Impact&quot; est déjà net des frais (frais de trading des plateformes utilisées, puis performance
+            fee de 30% sur les gains prélevée uniquement au-dessus du plus haut NAV jamais atteint). La colonne
+            &quot;Frais&quot; indique le montant total qui t&apos;aurait été attribué en plus si aucun frais
+            n&apos;avait été prélevé sur ce trade.
           </div>
         </div>
       )}

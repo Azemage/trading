@@ -56,6 +56,7 @@ enum TradeDirection {
 enum FeeType {
   MANAGEMENT
   PERFORMANCE
+  TRADING
 }
 
 enum UsdcNetwork {
@@ -166,6 +167,10 @@ model Trade {
   exitPrice       Decimal?        @db.Decimal(24, 8)
   positionSizePct Decimal?        @db.Decimal(7, 4) // % de l'AUM misé sur cette paire
   leverage        Decimal?        @db.Decimal(6, 2) // multiplicateur (1 = spot, pas de levier)
+
+  // Frais prélevés par la/les plateformes de trading (spread, financement, exécution...),
+  // déduits avant le calcul de l'impact % sur l'AUM et donc avant la performance fee.
+  tradingFeeUsd   Decimal?        @db.Decimal(24, 8)
 
   feeLedgerEntries FeeLedger[]
 

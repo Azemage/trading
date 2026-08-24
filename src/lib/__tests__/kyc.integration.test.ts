@@ -133,7 +133,7 @@ describe("KYC — revue manuelle", () => {
 
   it("rejette une photo trop volumineuse", async () => {
     const client = await makeClient("kycphoto3@test.local");
-    const tooLarge = Buffer.alloc(6 * 1024 * 1024); // 6 Mo > limite de 5 Mo
+    const tooLarge = Buffer.alloc(2 * 1024 * 1024); // 2 Mo > limite de 1,5 Mo
     await expect(
       submitKyc({
         clientId: client.id,

@@ -36,7 +36,7 @@ export function KycForm() {
           <input name="idBack" type="file" accept="image/jpeg,image/png,image/webp" required className="w-full text-xs" />
         </div>
       </div>
-      <div className="text-xs text-muted">JPEG, PNG ou WebP, 5 Mo maximum par photo.</div>
+      <div className="text-xs text-muted">JPEG, PNG ou WebP, 1,5 Mo maximum par photo.</div>
       <div>
         <label className="text-xs text-muted block mb-1">Note (optionnel)</label>
         <input name="note" className="w-full" />

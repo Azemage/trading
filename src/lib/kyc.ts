@@ -5,7 +5,9 @@ import { logAudit } from "./audit";
 export class KycError extends Error {}
 
 const ALLOWED_ID_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_ID_PHOTO_BYTES = 5 * 1024 * 1024; // 5 Mo par photo
+// Limité à 1,5 Mo par photo (recto + verso + champs texte doivent tenir sous la
+// limite de 4,5 Mo imposée par les fonctions serverless Vercel, non contournable).
+const MAX_ID_PHOTO_BYTES = 1.5 * 1024 * 1024;
 
 export interface IdPhoto {
   data: Buffer;
@@ -17,7 +19,7 @@ function validateIdPhoto(photo: IdPhoto, label: string) {
     throw new KycError(`${label} : format non supporté (JPEG, PNG ou WebP uniquement)`);
   }
   if (photo.data.byteLength > MAX_ID_PHOTO_BYTES) {
-    throw new KycError(`${label} : fichier trop volumineux (5 Mo maximum)`);
+    throw new KycError(`${label} : fichier trop volumineux (1,5 Mo maximum)`);
   }
   if (photo.data.byteLength === 0) {
     throw new KycError(`${label} : fichier vide`);

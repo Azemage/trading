@@ -4,15 +4,17 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { requestDeposit, requestWithdrawal } from "@/lib/movements";
-import { submitKyc, KycError } from "@/lib/kyc";
-import { updateUsdcAddress, AccountError } from "@/lib/account";
-import { sendEmail, notifyManagers, emailTemplates, type EmailAttachment } from "@/lib/email";
+import { submitKyc } from "@/lib/kyc";
+import { updateUsdcAddress } from "@/lib/account";
+import { sendEmail, notifyManagers, emailTemplates, getEmailT, getUserPreferredLocale, type EmailAttachment } from "@/lib/email";
+import { translateActionError } from "@/lib/error-i18n";
+import { AppError } from "@/lib/app-error";
 import type { UsdcNetworkValue } from "@/lib/usdc";
 
 async function requireClient() {
   const session = await auth();
   if (!session?.user || session.user.role !== "CLIENT") {
-    throw new Error("Non authentifié");
+    throw new AppError("UNAUTHENTICATED");
   }
   return session.user;
 }
@@ -24,19 +26,21 @@ export async function depositAction(
   try {
     const user = await requireClient();
     const amount = Number(formData.get("amount"));
-    if (!amount || amount <= 0) return { error: "Montant invalide" };
+    if (!amount || amount <= 0) return { error: await translateActionError(new AppError("MOVEMENT_INVALID_AMOUNT")) };
 
     await requestDeposit(user.id, new Decimal(amount));
-    await notifyManagers("Nouvelle demande de dépôt", emailTemplates.managerNewDeposit(user.name ?? "", amount));
-    await sendEmail({
-      to: user.email ?? "",
-      subject: "Demande de dépôt reçue",
-      html: emailTemplates.depositSubmittedConfirmation(user.name ?? "", amount),
-    });
+
+    await notifyManagers((mt, mLocale) => emailTemplates.managerNewDeposit(mt, mLocale, user.name ?? "", amount));
+
+    const locale = await getUserPreferredLocale(user.id);
+    const t = await getEmailT(locale);
+    const { subject, html } = emailTemplates.depositSubmittedConfirmation(t, locale, user.name ?? "", amount);
+    await sendEmail({ to: user.email ?? "", subject, html });
+
     revalidatePath("/client");
     return { error: null };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Erreur inconnue" };
+    return { error: await translateActionError(e) };
   }
 }
 
@@ -48,22 +52,29 @@ export async function withdrawAction(
     const user = await requireClient();
     const raw = String(formData.get("amount") ?? "");
     const amount = raw.trim().toLowerCase() === "all" ? "all" : Number(raw);
-    if (amount !== "all" && (!amount || amount <= 0)) return { error: "Montant invalide" };
+    if (amount !== "all" && (!amount || amount <= 0)) {
+      return { error: await translateActionError(new AppError("MOVEMENT_INVALID_AMOUNT")) };
+    }
 
     const movement = await requestWithdrawal(user.id, amount === "all" ? "all" : new Decimal(amount));
-    await notifyManagers(
-      "Nouvelle demande de retrait",
-      emailTemplates.managerNewWithdrawal(user.name ?? "", movement.amount.toNumber())
+
+    const locale = await getUserPreferredLocale(user.id);
+    const t = await getEmailT(locale);
+    await notifyManagers((mt, mLocale) =>
+      emailTemplates.managerNewWithdrawal(mt, mLocale, user.name ?? "", movement.amount.toNumber())
     );
-    await sendEmail({
-      to: user.email ?? "",
-      subject: "Demande de retrait reçue",
-      html: emailTemplates.withdrawalSubmittedConfirmation(user.name ?? "", movement.amount.toNumber()),
-    });
+    const { subject, html } = emailTemplates.withdrawalSubmittedConfirmation(
+      t,
+      locale,
+      user.name ?? "",
+      movement.amount.toNumber()
+    );
+    await sendEmail({ to: user.email ?? "", subject, html });
+
     revalidatePath("/client");
     return { error: null };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Erreur inconnue" };
+    return { error: await translateActionError(e) };
   }
 }
 
@@ -101,20 +112,19 @@ export async function submitKycAction(
     if (idBack) attachments.push({ filename: `verso.${extFromMime(idBack.mimeType)}`, content: idBack.data });
 
     await notifyManagers(
-      "Nouvelle soumission KYC",
-      emailTemplates.managerNewKyc(user.name ?? "", attachments.length > 0),
+      (mt) => emailTemplates.managerNewKyc(mt, user.name ?? "", attachments.length > 0),
       attachments.length > 0 ? attachments : undefined
     );
-    await sendEmail({
-      to: user.email ?? "",
-      subject: "KYC reçu",
-      html: emailTemplates.kycSubmittedConfirmation(user.name ?? ""),
-    });
+
+    const locale = await getUserPreferredLocale(user.id);
+    const t = await getEmailT(locale);
+    const { subject, html } = emailTemplates.kycSubmittedConfirmation(t, user.name ?? "");
+    await sendEmail({ to: user.email ?? "", subject, html });
+
     revalidatePath("/client");
     return { error: null };
   } catch (e) {
-    if (e instanceof KycError) return { error: e.message };
-    return { error: e instanceof Error ? e.message : "Erreur inconnue" };
+    return { error: await translateActionError(e) };
   }
 }
 
@@ -132,7 +142,6 @@ export async function updateUsdcAddressAction(
     revalidatePath("/client");
     return { error: null };
   } catch (e) {
-    if (e instanceof AccountError) return { error: e.message };
-    return { error: e instanceof Error ? e.message : "Erreur inconnue" };
+    return { error: await translateActionError(e) };
   }
 }

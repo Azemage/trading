@@ -86,6 +86,8 @@ model User {
   usdcAddress  String?
   twoFactorSecret  String?
   twoFactorEnabled Boolean  @default(false)
+  // Langue préférée ("fr" | "en" | "es") — détermine la langue des emails envoyés à cet utilisateur.
+  preferredLocale  String    @default("fr")
   createdAt    DateTime  @default(now())
 
   holding           ClientHolding?

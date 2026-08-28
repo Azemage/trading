@@ -3,14 +3,15 @@ import { FeeType, Prisma, Role, TradeDirection, TradeSource } from "@prisma/clie
 import { prisma } from "./prisma";
 import { applyTradeResult } from "./fees";
 import { computeNav, d } from "./nav";
+import { AppError } from "./app-error";
 
-class TradeError extends Error {}
+class TradeError extends AppError {}
 
 async function lockPoolState(tx: Prisma.TransactionClient) {
   const rows = await tx.$queryRaw<
     { id: number; totalAssets: Decimal; totalParts: Decimal; highWaterMark: Decimal }[]
   >`SELECT * FROM pool_state WHERE id = 1 FOR UPDATE`;
-  if (!rows[0]) throw new TradeError("pool_state introuvable");
+  if (!rows[0]) throw new TradeError("POOL_STATE_NOT_FOUND");
   return rows[0];
 }
 
@@ -33,13 +34,13 @@ export async function logManualTrade(params: {
   };
 }) {
   if (params.tradingFeeUsd?.lessThan(0)) {
-    throw new TradeError("Les frais de trading ne peuvent pas être négatifs");
+    throw new TradeError("TRADE_NEGATIVE_FEE");
   }
 
   return prisma.$transaction(async (tx) => {
     const pool = await lockPoolState(tx);
     if (d(pool.totalAssets).lessThanOrEqualTo(0)) {
-      throw new TradeError("Le pool est vide, aucun trade ne peut être enregistré");
+      throw new TradeError("TRADE_EMPTY_POOL");
     }
 
     const result = applyTradeResult({
@@ -51,9 +52,7 @@ export async function logManualTrade(params: {
     });
 
     if (result.totalAssetsAfterNet.lessThan(0)) {
-      throw new TradeError(
-        "Les frais de trading dépassent la valeur du pool après ce résultat — vérifie le montant saisi"
-      );
+      throw new TradeError("TRADE_FEE_EXCEEDS_POOL");
     }
 
     await tx.poolState.update({
@@ -141,10 +140,10 @@ export async function adjustPoolAssets(params: {
   managerId: string;
 }) {
   if (params.newTotalAssets.lessThan(0)) {
-    throw new TradeError("L'AUM ne peut pas être négatif");
+    throw new TradeError("TRADE_NEGATIVE_AUM");
   }
   if (!params.reason.trim()) {
-    throw new TradeError("Un motif est requis pour ajuster le pool manuellement");
+    throw new TradeError("TRADE_ADJUST_REASON_REQUIRED");
   }
 
   return prisma.$transaction(async (tx) => {

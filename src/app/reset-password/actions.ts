@@ -1,7 +1,9 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { resetPasswordWithToken, PasswordResetError } from "@/lib/password-reset";
+import { getTranslations } from "next-intl/server";
+import { resetPasswordWithToken } from "@/lib/password-reset";
+import { translateActionError } from "@/lib/error-i18n";
 
 export async function resetPasswordAction(
   _prevState: { error: string | null },
@@ -11,13 +13,15 @@ export async function resetPasswordAction(
   const password = String(formData.get("password") ?? "");
   const confirm = String(formData.get("confirm") ?? "");
 
-  if (password !== confirm) return { error: "Les deux mots de passe ne correspondent pas" };
+  if (password !== confirm) {
+    const t = await getTranslations("errors");
+    return { error: t("PASSWORD_MISMATCH") };
+  }
 
   try {
     await resetPasswordWithToken({ token, newPassword: password });
   } catch (e) {
-    if (e instanceof PasswordResetError) return { error: e.message };
-    return { error: e instanceof Error ? e.message : "Erreur inconnue" };
+    return { error: await translateActionError(e) };
   }
 
   redirect("/login");

@@ -2,8 +2,9 @@ import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
 import { logAudit } from "./audit";
+import { AppError } from "./app-error";
 
-export class PasswordResetError extends Error {}
+export class PasswordResetError extends AppError {}
 
 const TOKEN_TTL_MS = 60 * 60 * 1000; // 1h
 const MIN_PASSWORD_LENGTH = 10;
@@ -50,11 +51,11 @@ export async function findValidPasswordResetToken(token: string) {
 
 export async function resetPasswordWithToken(params: { token: string; newPassword: string }) {
   if (params.newPassword.length < MIN_PASSWORD_LENGTH) {
-    throw new PasswordResetError(`Le mot de passe doit contenir au moins ${MIN_PASSWORD_LENGTH} caractères`);
+    throw new PasswordResetError("PASSWORD_TOO_SHORT", { min: MIN_PASSWORD_LENGTH });
   }
 
   const record = await findValidPasswordResetToken(params.token);
-  if (!record) throw new PasswordResetError("Lien de réinitialisation invalide ou expiré");
+  if (!record) throw new PasswordResetError("PASSWORD_RESET_LINK_INVALID");
 
   const passwordHash = await bcrypt.hash(params.newPassword, 12);
 

@@ -1,16 +1,13 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { useTranslations } from "next-intl";
 import { submitKycAction } from "./actions";
 
 const MAX_PHOTO_BYTES = 1.5 * 1024 * 1024;
 
-function FileSizeCheck({ file, error }: { file: File | null; error: string | null }) {
-  if (!file || !error) return null;
-  return <div className="text-red text-xs mt-1">{error}</div>;
-}
-
 export function KycForm() {
+  const t = useTranslations("client");
   const [state, formAction, pending] = useActionState(submitKycAction, { error: null });
   const [frontError, setFrontError] = useState<string | null>(null);
   const [frontFile, setFrontFile] = useState<File | null>(null);
@@ -21,7 +18,7 @@ export function KycForm() {
     if (!file) return setError(null);
     setError(
       file.size > MAX_PHOTO_BYTES
-        ? `Fichier trop volumineux (${(file.size / (1024 * 1024)).toFixed(1)} Mo) — 1,5 Mo maximum, choisis une photo plus légère.`
+        ? t("photoTooLarge", { size: (file.size / (1024 * 1024)).toFixed(1) })
         : null
     );
   }
@@ -32,25 +29,25 @@ export function KycForm() {
     <form action={formAction} className="space-y-2">
       <div className="grid sm:grid-cols-2 gap-2">
         <div>
-          <label className="text-xs text-muted block mb-1">Nom légal complet</label>
+          <label className="text-xs text-muted block mb-1">{t("legalName")}</label>
           <input name="legalName" required className="w-full" />
         </div>
         <div>
-          <label className="text-xs text-muted block mb-1">Type de document</label>
+          <label className="text-xs text-muted block mb-1">{t("documentType")}</label>
           <select name="documentType" required className="w-full">
-            <option value="Passeport">Passeport</option>
-            <option value="Carte d'identité">Carte d&apos;identité</option>
-            <option value="Permis de conduire">Permis de conduire</option>
+            <option value="Passeport">{t("documentPassport")}</option>
+            <option value="Carte d'identité">{t("documentIdCard")}</option>
+            <option value="Permis de conduire">{t("documentDrivingLicense")}</option>
           </select>
         </div>
       </div>
       <div>
-        <label className="text-xs text-muted block mb-1">Numéro de document</label>
+        <label className="text-xs text-muted block mb-1">{t("documentNumber")}</label>
         <input name="documentNumber" required className="w-full" />
       </div>
       <div className="grid sm:grid-cols-2 gap-2">
         <div>
-          <label className="text-xs text-muted block mb-1">Photo recto</label>
+          <label className="text-xs text-muted block mb-1">{t("photoFront")}</label>
           <input
             name="idFront"
             type="file"
@@ -63,10 +60,10 @@ export function KycForm() {
               checkFile(file, setFrontError);
             }}
           />
-          <FileSizeCheck file={frontFile} error={frontError} />
+          {frontFile && frontError && <div className="text-red text-xs mt-1">{frontError}</div>}
         </div>
         <div>
-          <label className="text-xs text-muted block mb-1">Photo verso</label>
+          <label className="text-xs text-muted block mb-1">{t("photoBack")}</label>
           <input
             name="idBack"
             type="file"
@@ -79,17 +76,17 @@ export function KycForm() {
               checkFile(file, setBackError);
             }}
           />
-          <FileSizeCheck file={backFile} error={backError} />
+          {backFile && backError && <div className="text-red text-xs mt-1">{backError}</div>}
         </div>
       </div>
-      <div className="text-xs text-muted">JPEG, PNG ou WebP, 1,5 Mo maximum par photo.</div>
+      <div className="text-xs text-muted">{t("photoHint")}</div>
       <div>
-        <label className="text-xs text-muted block mb-1">Note (optionnel)</label>
+        <label className="text-xs text-muted block mb-1">{t("note")}</label>
         <input name="note" className="w-full" />
       </div>
       {state.error && <div className="text-red text-xs">{state.error}</div>}
       <button type="submit" disabled={pending || hasOversizedFile} className="btn">
-        {pending ? "Envoi…" : "Soumettre pour vérification →"}
+        {pending ? t("sending") : t("submitForVerification")}
       </button>
     </form>
   );

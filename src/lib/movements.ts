@@ -4,8 +4,9 @@ import { prisma } from "./prisma";
 import { computeNav, d } from "./nav";
 import { PENDING_MOVEMENT_DELAY_HOURS } from "./constants";
 import { logAudit } from "./audit";
+import { AppError } from "./app-error";
 
-class MovementError extends Error {}
+class MovementError extends AppError {}
 
 function eligibleAtFromNow() {
   return new Date(Date.now() + PENDING_MOVEMENT_DELAY_HOURS * 60 * 60 * 1000);
@@ -17,7 +18,7 @@ async function lockPoolState(tx: Prisma.TransactionClient) {
   const rows = await tx.$queryRaw<
     { id: number; totalAssets: Decimal; totalParts: Decimal; highWaterMark: Decimal }[]
   >`SELECT * FROM pool_state WHERE id = 1 FOR UPDATE`;
-  if (!rows[0]) throw new MovementError("pool_state introuvable");
+  if (!rows[0]) throw new MovementError("POOL_STATE_NOT_FOUND");
   return rows[0];
 }
 
@@ -29,12 +30,12 @@ async function lockClientHolding(tx: Prisma.TransactionClient, clientId: string)
 }
 
 export async function requestDeposit(clientId: string, amount: Decimal) {
-  if (amount.lessThanOrEqualTo(0)) throw new MovementError("Montant invalide");
+  if (amount.lessThanOrEqualTo(0)) throw new MovementError("MOVEMENT_INVALID_AMOUNT");
 
   const client = await prisma.user.findUnique({ where: { id: clientId }, select: { kycStatus: true } });
-  if (!client) throw new MovementError("Client introuvable");
+  if (!client) throw new MovementError("MOVEMENT_CLIENT_NOT_FOUND");
   if (client.kycStatus !== "VERIFIED") {
-    throw new MovementError("Vérification KYC requise avant de faire un dépôt");
+    throw new MovementError("MOVEMENT_KYC_REQUIRED_DEPOSIT");
   }
 
   return prisma.$transaction(async (tx) => {
@@ -69,13 +70,13 @@ export async function approveDeposit(movementId: string, managerId: string) {
   return prisma.$transaction(async (tx) => {
     const movement = await tx.pendingMovement.findUnique({ where: { id: movementId } });
     if (!movement || movement.type !== MovementType.DEPOSIT) {
-      throw new MovementError("Dépôt introuvable");
+      throw new MovementError("MOVEMENT_DEPOSIT_NOT_FOUND");
     }
     if (movement.status !== MovementStatus.PENDING_CONFIRMATION) {
-      throw new MovementError("Ce dépôt n'est plus en attente de confirmation");
+      throw new MovementError("MOVEMENT_DEPOSIT_NOT_PENDING");
     }
     if (new Date() < movement.eligibleAt) {
-      throw new MovementError("Délai de traitement (anti-arbitrage) non écoulé");
+      throw new MovementError("MOVEMENT_DELAY_NOT_ELAPSED");
     }
 
     const pool = await lockPoolState(tx);
@@ -131,10 +132,10 @@ export async function rejectDeposit(movementId: string, managerId: string, reaso
   return prisma.$transaction(async (tx) => {
     const movement = await tx.pendingMovement.findUnique({ where: { id: movementId } });
     if (!movement || movement.type !== MovementType.DEPOSIT) {
-      throw new MovementError("Dépôt introuvable");
+      throw new MovementError("MOVEMENT_DEPOSIT_NOT_FOUND");
     }
     if (movement.status !== MovementStatus.PENDING_CONFIRMATION) {
-      throw new MovementError("Ce dépôt n'est plus en attente de confirmation");
+      throw new MovementError("MOVEMENT_DEPOSIT_NOT_PENDING");
     }
 
     const updated = await tx.pendingMovement.update({
@@ -175,12 +176,12 @@ export async function requestWithdrawal(
     where: { id: clientId },
     select: { kycStatus: true, usdcAddress: true },
   });
-  if (!client) throw new MovementError("Client introuvable");
+  if (!client) throw new MovementError("MOVEMENT_CLIENT_NOT_FOUND");
   if (client.kycStatus !== "VERIFIED") {
-    throw new MovementError("Vérification KYC requise avant de pouvoir retirer des fonds");
+    throw new MovementError("MOVEMENT_KYC_REQUIRED_WITHDRAWAL");
   }
   if (!client.usdcAddress) {
-    throw new MovementError("Ajoute une adresse USDC dans ton compte avant de demander un retrait");
+    throw new MovementError("MOVEMENT_USDC_ADDRESS_REQUIRED");
   }
 
   return prisma.$transaction(async (tx) => {
@@ -188,14 +189,14 @@ export async function requestWithdrawal(
     const holding = await lockClientHolding(tx, clientId);
     const clientParts = holding ? d(holding.parts) : new Decimal(0);
     if (clientParts.lessThanOrEqualTo(0)) {
-      throw new MovementError("Aucune part détenue par ce client");
+      throw new MovementError("MOVEMENT_NO_HOLDING");
     }
 
     const navAtRequest = computeNav(pool.totalAssets, pool.totalParts);
     const maxValue = clientParts.times(navAtRequest);
     const requestedAmount =
       amountOrAll === "all" ? maxValue : amountOrAll;
-    if (requestedAmount.lessThanOrEqualTo(0)) throw new MovementError("Montant invalide");
+    if (requestedAmount.lessThanOrEqualTo(0)) throw new MovementError("MOVEMENT_INVALID_AMOUNT");
 
     // Ne peut jamais retirer plus que ce qu'il possède réellement.
     const valueRequested = Decimal.min(requestedAmount, maxValue);
@@ -259,15 +260,15 @@ export async function markWithdrawalSent(
   return prisma.$transaction(async (tx) => {
     const movement = await tx.pendingMovement.findUnique({ where: { id: movementId } });
     if (!movement || movement.type !== MovementType.WITHDRAWAL) {
-      throw new MovementError("Retrait introuvable");
+      throw new MovementError("MOVEMENT_WITHDRAWAL_NOT_FOUND");
     }
     if (movement.status !== MovementStatus.PENDING_EXECUTION) {
-      throw new MovementError("Ce retrait n'est plus en attente d'exécution");
+      throw new MovementError("MOVEMENT_WITHDRAWAL_NOT_PENDING");
     }
     if (new Date() < movement.eligibleAt) {
-      throw new MovementError("Délai de traitement (anti-arbitrage) non écoulé");
+      throw new MovementError("MOVEMENT_DELAY_NOT_ELAPSED");
     }
-    if (!txHash.trim()) throw new MovementError("tx_hash requis pour marquer un envoi");
+    if (!txHash.trim()) throw new MovementError("MOVEMENT_TX_HASH_REQUIRED");
 
     const updated = await tx.pendingMovement.update({
       where: { id: movementId },
@@ -301,10 +302,10 @@ export async function rejectWithdrawal(
   return prisma.$transaction(async (tx) => {
     const movement = await tx.pendingMovement.findUnique({ where: { id: movementId } });
     if (!movement || movement.type !== MovementType.WITHDRAWAL) {
-      throw new MovementError("Retrait introuvable");
+      throw new MovementError("MOVEMENT_WITHDRAWAL_NOT_FOUND");
     }
     if (movement.status !== MovementStatus.PENDING_EXECUTION) {
-      throw new MovementError("Ce retrait n'est plus en attente d'exécution");
+      throw new MovementError("MOVEMENT_WITHDRAWAL_NOT_PENDING");
     }
 
     await lockPoolState(tx);

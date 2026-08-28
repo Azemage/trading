@@ -1,5 +1,8 @@
 import { Resend } from "resend";
+import { getTranslations } from "next-intl/server";
 import { prisma } from "./prisma";
+import { fmtUsd } from "./format";
+import { isLocale, DEFAULT_LOCALE, type Locale } from "@/i18n/config";
 
 const FROM = process.env.EMAIL_FROM ?? "Ledger Capital <onboarding@resend.dev>";
 
@@ -13,6 +16,9 @@ export interface EmailAttachment {
   filename: string;
   content: Buffer;
 }
+
+/** Fonction de traduction scopée au namespace "emails", pour une locale donnée. */
+export type EmailT = Awaited<ReturnType<typeof getTranslations>>;
 
 /**
  * Envoie un email via Resend si RESEND_API_KEY est configurée, sinon logge
@@ -48,95 +54,138 @@ export async function sendEmail(params: {
   }
 }
 
-/** Envoie le même email (avec pièces jointes éventuelles) à tous les comptes gestionnaire. */
-export async function notifyManagers(subject: string, html: string, attachments?: EmailAttachment[]) {
-  const managers = await prisma.user.findMany({ where: { role: "MANAGER" }, select: { email: true } });
-  await Promise.all(managers.map((m) => sendEmail({ to: m.email, subject, html, attachments })));
+function resolveLocale(locale: string | null | undefined): Locale {
+  return locale && isLocale(locale) ? locale : DEFAULT_LOCALE;
 }
 
-function layout(title: string, bodyHtml: string) {
+/** Résout la fonction de traduction "emails" pour la locale préférée d'un utilisateur. */
+export async function getEmailT(locale: string | null | undefined): Promise<EmailT> {
+  return getTranslations({ locale: resolveLocale(locale), namespace: "emails" });
+}
+
+/** Langue préférée actuelle d'un utilisateur (toujours lue en base, jamais mise en cache dans la session). */
+export async function getUserPreferredLocale(userId: string): Promise<Locale> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { preferredLocale: true } });
+  return resolveLocale(user?.preferredLocale);
+}
+
+/**
+ * Envoie le même modèle d'email (avec pièces jointes éventuelles) à tous les
+ * comptes gestionnaire, CHACUN dans sa propre langue préférée.
+ */
+export async function notifyManagers(
+  build: (t: EmailT, locale: Locale) => { subject: string; html: string },
+  attachments?: EmailAttachment[]
+) {
+  const managers = await prisma.user.findMany({
+    where: { role: "MANAGER" },
+    select: { email: true, preferredLocale: true },
+  });
+  await Promise.all(
+    managers.map(async (m) => {
+      const locale = resolveLocale(m.preferredLocale);
+      const t = await getEmailT(locale);
+      const { subject, html } = build(t, locale);
+      return sendEmail({ to: m.email, subject, html, attachments });
+    })
+  );
+}
+
+function layout(t: EmailT, title: string, bodyHtml: string) {
   return `<div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; color: #1a1a1a;">
     <h2 style="color: #0a0d12;">${title}</h2>
     ${bodyHtml}
-    <p style="color: #8b95a5; font-size: 12px; margin-top: 24px;">Ledger Capital — cet email est automatique, ne pas répondre.</p>
+    <p style="color: #8b95a5; font-size: 12px; margin-top: 24px;">${t("footer")}</p>
   </div>`;
 }
 
-function fmtUsd(n: number) {
-  return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " $";
-}
-
 export const emailTemplates = {
-  welcomeRegistration: (clientName: string) =>
-    layout(
-      "Bienvenue chez Ledger Capital",
-      `<p>Bonjour ${clientName},</p><p>Ton compte a bien été créé. Avant de pouvoir effectuer un premier dépôt, complète ta vérification KYC depuis ton espace client.</p>`
+  welcomeRegistration: (t: EmailT, clientName: string) => ({
+    subject: t("welcomeSubject"),
+    html: layout(t, t("welcomeTitle"), t("welcomeBody", { name: clientName })),
+  }),
+  kycSubmittedConfirmation: (t: EmailT, clientName: string) => ({
+    subject: t("kycSubmittedSubject"),
+    html: layout(t, t("kycSubmittedTitle"), t("kycSubmittedBody", { name: clientName })),
+  }),
+  depositSubmittedConfirmation: (t: EmailT, locale: Locale, clientName: string, amount: number) => ({
+    subject: t("depositSubmittedSubject"),
+    html: layout(
+      t,
+      t("depositSubmittedTitle"),
+      t("depositSubmittedBody", { name: clientName, amount: fmtUsd(amount, locale) })
     ),
-  kycSubmittedConfirmation: (clientName: string) =>
-    layout(
-      "KYC reçu",
-      `<p>Bonjour ${clientName},</p><p>Ta soumission KYC a bien été reçue et est en attente de revue par un gestionnaire. Tu seras notifié dès qu'elle sera traitée.</p>`
+  }),
+  withdrawalSubmittedConfirmation: (t: EmailT, locale: Locale, clientName: string, amount: number) => ({
+    subject: t("withdrawalSubmittedSubject"),
+    html: layout(
+      t,
+      t("withdrawalSubmittedTitle"),
+      t("withdrawalSubmittedBody", { name: clientName, amount: fmtUsd(amount, locale) })
     ),
-  depositSubmittedConfirmation: (clientName: string, amount: number) =>
-    layout(
-      "Demande de dépôt reçue",
-      `<p>Bonjour ${clientName},</p><p>Ta demande de dépôt de <strong>${fmtUsd(amount)}</strong> a bien été reçue et est en attente de confirmation par un gestionnaire.</p>`
+  }),
+  depositApproved: (t: EmailT, locale: Locale, clientName: string, amount: number) => ({
+    subject: t("depositApprovedSubject"),
+    html: layout(t, t("depositApprovedTitle"), t("depositApprovedBody", { name: clientName, amount: fmtUsd(amount, locale) })),
+  }),
+  depositRejected: (t: EmailT, locale: Locale, clientName: string, amount: number, reason: string) => ({
+    subject: t("depositRejectedSubject"),
+    html: layout(
+      t,
+      t("depositRejectedTitle"),
+      t("depositRejectedBody", { name: clientName, amount: fmtUsd(amount, locale), reason })
     ),
-  withdrawalSubmittedConfirmation: (clientName: string, amount: number) =>
-    layout(
-      "Demande de retrait reçue",
-      `<p>Bonjour ${clientName},</p><p>Ta demande de retrait de <strong>${fmtUsd(amount)}</strong> a bien été reçue et est en cours de traitement par un gestionnaire.</p>`
+  }),
+  withdrawalSent: (t: EmailT, locale: Locale, clientName: string, amount: number, txHash: string) => ({
+    subject: t("withdrawalSentSubject"),
+    html: layout(
+      t,
+      t("withdrawalSentTitle"),
+      t("withdrawalSentBody", { name: clientName, amount: fmtUsd(amount, locale), txHash })
     ),
-  depositApproved: (clientName: string, amount: number) =>
-    layout(
-      "Dépôt confirmé",
-      `<p>Bonjour ${clientName},</p><p>Ton dépôt de <strong>${fmtUsd(amount)}</strong> a été confirmé et ajouté au pool commun.</p>`
+  }),
+  withdrawalRejected: (t: EmailT, locale: Locale, clientName: string, amount: number, reason: string) => ({
+    subject: t("withdrawalRejectedSubject"),
+    html: layout(
+      t,
+      t("withdrawalRejectedTitle"),
+      t("withdrawalRejectedBody", { name: clientName, amount: fmtUsd(amount, locale), reason })
     ),
-  depositRejected: (clientName: string, amount: number, reason: string) =>
-    layout(
-      "Dépôt rejeté",
-      `<p>Bonjour ${clientName},</p><p>Ton dépôt de <strong>${fmtUsd(amount)}</strong> a été rejeté.</p><p>Motif : ${reason}</p>`
+  }),
+  kycApproved: (t: EmailT, clientName: string) => ({
+    subject: t("kycApprovedSubject"),
+    html: layout(t, t("kycApprovedTitle"), t("kycApprovedBody", { name: clientName })),
+  }),
+  kycRejected: (t: EmailT, clientName: string, reason: string) => ({
+    subject: t("kycRejectedSubject"),
+    html: layout(t, t("kycRejectedTitle"), t("kycRejectedBody", { name: clientName, reason })),
+  }),
+  managerNewDeposit: (t: EmailT, locale: Locale, clientName: string, amount: number) => ({
+    subject: t("managerNewDepositSubject"),
+    html: layout(
+      t,
+      t("managerNewDepositTitle"),
+      t("managerNewDepositBody", { name: clientName, amount: fmtUsd(amount, locale) })
     ),
-  withdrawalSent: (clientName: string, amount: number, txHash: string) =>
-    layout(
-      "Retrait envoyé",
-      `<p>Bonjour ${clientName},</p><p>Ton retrait de <strong>${fmtUsd(amount)}</strong> a été envoyé.</p><p>Référence de transaction : <code>${txHash}</code></p>`
+  }),
+  managerNewWithdrawal: (t: EmailT, locale: Locale, clientName: string, amount: number) => ({
+    subject: t("managerNewWithdrawalSubject"),
+    html: layout(
+      t,
+      t("managerNewWithdrawalTitle"),
+      t("managerNewWithdrawalBody", { name: clientName, amount: fmtUsd(amount, locale) })
     ),
-  withdrawalRejected: (clientName: string, amount: number, reason: string) =>
-    layout(
-      "Retrait rejeté",
-      `<p>Bonjour ${clientName},</p><p>Ta demande de retrait de <strong>${fmtUsd(amount)}</strong> a été rejetée, tes parts ont été restituées.</p><p>Motif : ${reason}</p>`
+  }),
+  passwordReset: (t: EmailT, resetUrl: string) => ({
+    subject: t("passwordResetSubject"),
+    html: layout(t, t("passwordResetTitle"), t.raw("passwordResetBody").replace("{url}", resetUrl)),
+  }),
+  managerNewKyc: (t: EmailT, clientName: string, hasPhotos: boolean) => ({
+    subject: t("managerNewKycSubject"),
+    html: layout(
+      t,
+      t("managerNewKycTitle"),
+      t("managerNewKycBody", { name: clientName }) + (hasPhotos ? t("managerNewKycPhotosNote") : "")
     ),
-  kycApproved: (clientName: string) =>
-    layout(
-      "Vérification KYC approuvée",
-      `<p>Bonjour ${clientName},</p><p>Ta vérification d'identité a été approuvée. Tu peux maintenant demander des retraits.</p>`
-    ),
-  kycRejected: (clientName: string, reason: string) =>
-    layout(
-      "Vérification KYC rejetée",
-      `<p>Bonjour ${clientName},</p><p>Ta vérification d'identité a été rejetée.</p><p>Motif : ${reason}</p><p>Tu peux soumettre une nouvelle demande depuis ton espace client.</p>`
-    ),
-  managerNewDeposit: (clientName: string, amount: number) =>
-    layout(
-      "Nouvelle demande de dépôt",
-      `<p>${clientName} a demandé un dépôt de <strong>${fmtUsd(amount)}</strong>. À valider dans l'espace gestionnaire.</p>`
-    ),
-  managerNewWithdrawal: (clientName: string, amount: number) =>
-    layout(
-      "Nouvelle demande de retrait",
-      `<p>${clientName} a demandé un retrait de <strong>${fmtUsd(amount)}</strong>. À traiter dans l'espace gestionnaire.</p>`
-    ),
-  passwordReset: (resetUrl: string) =>
-    layout(
-      "Réinitialisation du mot de passe",
-      `<p>Une demande de réinitialisation de mot de passe a été faite pour ce compte.</p><p><a href="${resetUrl}">Choisir un nouveau mot de passe</a></p><p>Ce lien expire dans 1 heure. Si tu n'es pas à l'origine de cette demande, ignore cet email.</p>`
-    ),
-  managerNewKyc: (clientName: string, hasPhotos: boolean) =>
-    layout(
-      "Nouvelle soumission KYC",
-      `<p>${clientName} a soumis ses documents KYC. À revoir dans l'espace gestionnaire.</p>${
-        hasPhotos ? "<p>Les photos recto/verso sont jointes à cet email.</p>" : ""
-      }`
-    ),
+  }),
 };

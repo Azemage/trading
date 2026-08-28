@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import { registerClient, registerSchema, RegisterError } from "@/lib/register";
+import { AppError } from "@/lib/app-error";
+import { translateActionError } from "@/lib/error-i18n";
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const parsed = registerSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Champs invalides" }, { status: 400 });
+    return NextResponse.json(
+      { error: await translateActionError(new AppError("VALIDATION_INVALID_FIELDS")) },
+      { status: 400 }
+    );
   }
 
   try {
@@ -13,8 +18,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof RegisterError) {
-      return NextResponse.json({ error: e.message }, { status: 409 });
+      return NextResponse.json({ error: await translateActionError(e) }, { status: 409 });
     }
-    return NextResponse.json({ error: "Erreur inconnue" }, { status: 500 });
+    return NextResponse.json({ error: await translateActionError(e) }, { status: 500 });
   }
 }

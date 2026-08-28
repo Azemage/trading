@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { logTradeAction } from "./actions";
 import { ALLOWED_LEVERAGES } from "@/lib/leverage-options";
 
@@ -28,6 +29,7 @@ function computePreview(
 }
 
 export function TradeForm({ currentTotalAssets }: { currentTotalAssets: number }) {
+  const t = useTranslations("manager");
   const [state, formAction, pending] = useActionState(logTradeAction, { error: null });
   const [mode, setMode] = useState<"simple" | "position">("position");
   const [entryPrice, setEntryPrice] = useState("");
@@ -77,19 +79,19 @@ export function TradeForm({ currentTotalAssets }: { currentTotalAssets: number }
           onClick={() => setMode("position")}
           className={`btn text-xs ${mode === "position" ? "btn-gold" : ""}`}
         >
-          Depuis une paire
+          {t("fromPair")}
         </button>
         <button
           type="button"
           onClick={() => setMode("simple")}
           className={`btn text-xs ${mode === "simple" ? "btn-gold" : ""}`}
         >
-          % direct de l&apos;AUM
+          {t("directAumPct")}
         </button>
       </div>
 
       <div>
-        <div className="text-xs text-muted mb-1">Frais de trading (plateforme, $)</div>
+        <div className="text-xs text-muted mb-1">{t("tradingFeeLabel")}</div>
         <input
           name="tradingFeeUsd"
           type="number"
@@ -100,32 +102,29 @@ export function TradeForm({ currentTotalAssets }: { currentTotalAssets: number }
           value={tradingFeeUsd}
           onChange={(e) => setTradingFeeUsd(e.target.value)}
         />
-        <div className="text-xs text-muted mt-1">
-          Spread, financement, frais d&apos;exécution facturés par la/les plateformes utilisées — déduits avant le
-          calcul du % d&apos;impact sur l&apos;AUM et donc avant la performance fee.
-        </div>
+        <div className="text-xs text-muted mt-1">{t("tradingFeeHint")}</div>
       </div>
 
       {mode === "position" ? (
         <div className="flex gap-3 flex-wrap items-end">
           <div>
-            <div className="text-xs text-muted mb-1">Paire</div>
+            <div className="text-xs text-muted mb-1">{t("pair")}</div>
             <input name="pair" placeholder="BTC/USDT" required className="w-28" />
           </div>
           <div>
-            <div className="text-xs text-muted mb-1">Sens</div>
+            <div className="text-xs text-muted mb-1">{t("direction")}</div>
             <select
               name="direction"
               value={direction}
               onChange={(e) => setDirection(e.target.value as "LONG" | "SHORT")}
               className="w-28"
             >
-              <option value="LONG">Achat (long)</option>
-              <option value="SHORT">Vente à découvert (short)</option>
+              <option value="LONG">{t("directionLong")}</option>
+              <option value="SHORT">{t("directionShort")}</option>
             </select>
           </div>
           <div>
-            <div className="text-xs text-muted mb-1">Prix d&apos;entrée</div>
+            <div className="text-xs text-muted mb-1">{t("entryPrice")}</div>
             <input
               name="entryPrice"
               type="number"
@@ -137,7 +136,7 @@ export function TradeForm({ currentTotalAssets }: { currentTotalAssets: number }
             />
           </div>
           <div>
-            <div className="text-xs text-muted mb-1">Prix de sortie</div>
+            <div className="text-xs text-muted mb-1">{t("exitPrice")}</div>
             <input
               name="exitPrice"
               type="number"
@@ -149,7 +148,7 @@ export function TradeForm({ currentTotalAssets }: { currentTotalAssets: number }
             />
           </div>
           <div>
-            <div className="text-xs text-muted mb-1">Montant misé ($)</div>
+            <div className="text-xs text-muted mb-1">{t("positionSizeUsd")}</div>
             <input
               type="number"
               step="any"
@@ -161,7 +160,7 @@ export function TradeForm({ currentTotalAssets }: { currentTotalAssets: number }
             />
           </div>
           <div>
-            <div className="text-xs text-muted mb-1">% de l&apos;AUM misé</div>
+            <div className="text-xs text-muted mb-1">{t("positionSizePct")}</div>
             <input
               name="positionSizePct"
               type="number"
@@ -175,7 +174,7 @@ export function TradeForm({ currentTotalAssets }: { currentTotalAssets: number }
             />
           </div>
           <div>
-            <div className="text-xs text-muted mb-1">Levier</div>
+            <div className="text-xs text-muted mb-1">{t("leverage")}</div>
             <select
               name="leverage"
               value={leverage}
@@ -190,41 +189,43 @@ export function TradeForm({ currentTotalAssets }: { currentTotalAssets: number }
             </select>
           </div>
           <div className="flex-1 min-w-40">
-            <div className="text-xs text-muted mb-1">Note (optionnel)</div>
+            <div className="text-xs text-muted mb-1">{t("note")}</div>
             <input name="note" className="w-full" />
           </div>
           <button type="submit" disabled={pending} className="btn btn-gold">
-            {pending ? "Enregistrement…" : "Enregistrer →"}
+            {pending ? t("saving") : t("save")}
           </button>
 
           {preview && (
             <div className="text-xs w-full space-y-0.5">
               <div>
-                Variation de la paire :{" "}
+                {t("pairChange")}{" "}
                 <span className={preview.priceChangePct >= 0 ? "text-green" : "text-red"}>
                   {preview.priceChangePct >= 0 ? "+" : ""}
                   {preview.priceChangePct.toFixed(2)}%
                 </span>
                 {leverage > 1 && (
                   <>
-                    {" — "}Sur la mise (x{leverage}) :{" "}
+                    {" — "}
+                    {t("onStake", { leverage })}{" "}
                     <span className={preview.marginReturnPct >= 0 ? "text-green" : "text-red"}>
                       {preview.marginReturnPct >= 0 ? "+" : ""}
                       {preview.marginReturnPct.toFixed(2)}%
-                      {preview.marginReturnPct === -100 && " (liquidation)"}
+                      {preview.marginReturnPct === -100 && ` ${t("liquidation")}`}
                     </span>
                   </>
                 )}
               </div>
               <div>
-                Impact sur l&apos;AUM total :{" "}
+                {t("aumImpact")}{" "}
                 <span className={preview.pnlPctOfAum >= 0 ? "text-green" : "text-red"}>
                   {preview.pnlPctOfAum >= 0 ? "+" : ""}
                   {preview.pnlPctOfAum.toFixed(3)}%
                 </span>
                 {preview.pnlPctOfAumNet !== preview.pnlPctOfAum && (
                   <>
-                    {" — "}net des frais de trading :{" "}
+                    {" — "}
+                    {t("netOfTradingFees")}{" "}
                     <span className={preview.pnlPctOfAumNet >= 0 ? "text-green" : "text-red"}>
                       {preview.pnlPctOfAumNet >= 0 ? "+" : ""}
                       {preview.pnlPctOfAumNet.toFixed(3)}%
@@ -238,15 +239,15 @@ export function TradeForm({ currentTotalAssets }: { currentTotalAssets: number }
       ) : (
         <div className="flex gap-3 flex-wrap items-end">
           <div>
-            <div className="text-xs text-muted mb-1">Résultat en % de l&apos;AUM</div>
+            <div className="text-xs text-muted mb-1">{t("resultPctOfAum")}</div>
             <input name="pnlPct" type="number" step="0.01" required className="w-28" />
           </div>
           <div className="flex-1 min-w-40">
-            <div className="text-xs text-muted mb-1">Note (optionnel)</div>
+            <div className="text-xs text-muted mb-1">{t("note")}</div>
             <input name="note" className="w-full" />
           </div>
           <button type="submit" disabled={pending} className="btn btn-gold">
-            {pending ? "Enregistrement…" : "Enregistrer →"}
+            {pending ? t("saving") : t("save")}
           </button>
         </div>
       )}

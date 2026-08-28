@@ -2,8 +2,9 @@ import { prisma } from "./prisma";
 import { validateUsdcAddress, type UsdcNetworkValue } from "./usdc";
 import { logAudit } from "./audit";
 import { Role } from "@prisma/client";
+import { AppError } from "./app-error";
 
-export class AccountError extends Error {}
+export class AccountError extends AppError {}
 
 export async function updateUsdcAddress(params: {
   clientId: string;
@@ -11,7 +12,7 @@ export async function updateUsdcAddress(params: {
   address: string;
 }) {
   const { valid, error } = validateUsdcAddress(params.network, params.address);
-  if (!valid) throw new AccountError(error ?? "Adresse invalide");
+  if (!valid) throw new AccountError(error ?? "USDC_ADDRESS_INVALID");
 
   await prisma.$transaction(async (tx) => {
     await tx.user.update({

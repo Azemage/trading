@@ -2,11 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { beginTwoFactorSetup, confirmTwoFactorSetup, disableTwoFactor, TwoFactorError } from "@/lib/two-factor";
+import { beginTwoFactorSetup, confirmTwoFactorSetup, disableTwoFactor } from "@/lib/two-factor";
+import { translateActionError } from "@/lib/error-i18n";
+import { AppError } from "@/lib/app-error";
 
 async function requireUser() {
   const session = await auth();
-  if (!session?.user) throw new Error("Non authentifié");
+  if (!session?.user) throw new AppError("UNAUTHENTICATED");
   return session.user;
 }
 
@@ -22,7 +24,7 @@ export async function beginTwoFactorSetupAction(
     const { secret, qrCodeDataUrl } = await beginTwoFactorSetup(user.id);
     return { error: null, qrCodeDataUrl, secret };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Erreur inconnue", qrCodeDataUrl: null, secret: null };
+    return { error: await translateActionError(e), qrCodeDataUrl: null, secret: null };
   }
 }
 
@@ -37,8 +39,7 @@ export async function confirmTwoFactorSetupAction(
     revalidatePath("/security");
     return { error: null, success: true };
   } catch (e) {
-    if (e instanceof TwoFactorError) return { error: e.message, success: false };
-    return { error: e instanceof Error ? e.message : "Erreur inconnue", success: false };
+    return { error: await translateActionError(e), success: false };
   }
 }
 
@@ -53,7 +54,6 @@ export async function disableTwoFactorAction(
     revalidatePath("/security");
     return { error: null };
   } catch (e) {
-    if (e instanceof TwoFactorError) return { error: e.message };
-    return { error: e instanceof Error ? e.message : "Erreur inconnue" };
+    return { error: await translateActionError(e) };
   }
 }

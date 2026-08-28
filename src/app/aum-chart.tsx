@@ -9,15 +9,9 @@ import {
   CartesianGrid,
   Tooltip,
 } from "recharts";
-
-const REASON_LABELS: Record<string, string> = {
-  INIT: "Initialisation",
-  DEPOSIT: "Dépôt client",
-  WITHDRAWAL: "Retrait client",
-  TRADE: "Trade",
-  MANUAL_ADJUSTMENT: "Ajustement manuel (test)",
-  TEST_CLIENT_SEED: "Client de test créé",
-};
+import { useTranslations, useLocale } from "next-intl";
+import { fmtUsd } from "@/lib/format";
+import type { Locale } from "@/i18n/config";
 
 const COLORS = {
   green: "#34d399",
@@ -27,10 +21,6 @@ const COLORS = {
   muted: "#8b95a5",
   bg: "#0a0d12",
 };
-
-function fmt(n: number) {
-  return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " $";
-}
 
 function dotColor(reason: string, delta: number) {
   if (reason === "DEPOSIT" || reason === "TEST_CLIENT_SEED") return COLORS.blue;
@@ -58,13 +48,19 @@ function CustomDot(props: { cx?: number; cy?: number; payload?: { reason: string
 function CustomTooltip({
   active,
   payload,
+  reasonLabels,
+  fmt,
+  aumLabel,
 }: {
   active?: boolean;
   payload?: { payload: { reason: string; delta: number; totalAssets: number } }[];
+  reasonLabels: Record<string, string>;
+  fmt: (n: number) => string;
+  aumLabel: string;
 }) {
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
-  const label = REASON_LABELS[p.reason] ?? p.reason;
+  const label = reasonLabels[p.reason] ?? p.reason;
   const isFirst = p.reason === "INIT";
   return (
     <div
@@ -83,12 +79,26 @@ function CustomTooltip({
           {fmt(p.delta)}
         </div>
       )}
-      <div style={{ marginTop: 2 }}>AUM : {fmt(p.totalAssets)}</div>
+      <div style={{ marginTop: 2 }}>
+        {aumLabel} {fmt(p.totalAssets)}
+      </div>
     </div>
   );
 }
 
 export function AumChart({ data }: { data: { totalAssets: number; reason: string }[] }) {
+  const t = useTranslations("home");
+  const locale = useLocale() as Locale;
+  const fmt = (n: number) => fmtUsd(n, locale);
+  const reasonLabels: Record<string, string> = {
+    INIT: t("reasonInit"),
+    DEPOSIT: t("reasonDeposit"),
+    WITHDRAWAL: t("reasonWithdrawal"),
+    TRADE: t("reasonTrade"),
+    MANUAL_ADJUSTMENT: t("reasonManualAdjustment"),
+    TEST_CLIENT_SEED: t("reasonTestClientSeed"),
+  };
+
   const points = data.map((d, i) => ({
     label: `T${i}`,
     totalAssets: Math.round(d.totalAssets * 100) / 100,
@@ -103,26 +113,26 @@ export function AumChart({ data }: { data: { totalAssets: number; reason: string
           <CartesianGrid stroke="#1a1f2a" />
           <XAxis dataKey="label" tick={{ fill: COLORS.muted, fontSize: 10 }} />
           <YAxis tick={{ fill: COLORS.muted, fontSize: 10 }} domain={["auto", "auto"]} />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<CustomTooltip reasonLabels={reasonLabels} fmt={fmt} aumLabel={t("totalAum") + " :"} />} />
           <Line type="monotone" dataKey="totalAssets" stroke={COLORS.green} strokeWidth={2} dot={<CustomDot />} />
         </LineChart>
       </ResponsiveContainer>
       <div className="flex gap-4 flex-wrap text-xs text-muted mt-2">
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: COLORS.blue }} />
-          Dépôt / client de test
+          {t("legendDepositOrTestClient")}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: COLORS.gold }} />
-          Retrait / ajustement manuel
+          {t("legendWithdrawalOrAdjustment")}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-2 h-2 rounded-full" style={{ background: COLORS.green }} />
-          Trade gagnant
+          {t("legendWinningTrade")}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-2 h-2 rounded-full" style={{ background: COLORS.red }} />
-          Trade perdant
+          {t("legendLosingTrade")}
         </span>
       </div>
     </div>

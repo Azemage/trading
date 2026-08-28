@@ -1,5 +1,8 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { d, type Decimalish } from "./nav";
+import { AppError } from "./app-error";
+
+export class PositionError extends AppError {}
 
 export type TradeDirection = "LONG" | "SHORT";
 
@@ -29,10 +32,10 @@ export function computePositionPnlPct(params: {
   const leverage = params.leverage !== undefined ? d(params.leverage) : new Decimal(1);
 
   if (entryPrice.lessThanOrEqualTo(0)) {
-    throw new Error("Le prix d'entrée doit être strictement positif");
+    throw new PositionError("POSITION_ENTRY_PRICE_POSITIVE");
   }
   if (leverage.lessThan(1)) {
-    throw new Error("Le levier doit être supérieur ou égal à 1");
+    throw new PositionError("POSITION_LEVERAGE_MIN");
   }
 
   const rawChangePct = exitPrice.minus(entryPrice).dividedBy(entryPrice).times(100);

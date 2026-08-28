@@ -1,6 +1,9 @@
 "use client";
 
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
+import { useTranslations, useLocale } from "next-intl";
+import { fmtUsd } from "@/lib/format";
+import type { Locale } from "@/i18n/config";
 
 const COLORS = {
   green: "#34d399",
@@ -10,10 +13,6 @@ const COLORS = {
   muted: "#8b95a5",
   bg: "#0a0d12",
 };
-
-function fmt(n: number) {
-  return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " $";
-}
 
 type Point = { label: string; balance: number; kind: "DEPOSIT" | "WITHDRAWAL" | "TRADE"; gainUsd?: number };
 
@@ -39,25 +38,47 @@ function CustomDot(props: { cx?: number; cy?: number; payload?: Point }) {
   );
 }
 
-function CustomTooltip({ active, payload }: { active?: boolean; payload?: { payload: Point }[] }) {
+function CustomTooltip({
+  active,
+  payload,
+  labels,
+  fmt,
+  balanceLabel,
+}: {
+  active?: boolean;
+  payload?: { payload: Point }[];
+  labels: Record<Point["kind"], string>;
+  fmt: (n: number) => string;
+  balanceLabel: string;
+}) {
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
-  const label = p.kind === "DEPOSIT" ? "Dépôt" : p.kind === "WITHDRAWAL" ? "Retrait" : "Trade";
   return (
     <div style={{ background: "#171c27", border: "1px solid #232a38", borderRadius: 8, padding: "8px 10px", fontSize: 12 }}>
-      <div style={{ color: COLORS.muted, marginBottom: 2 }}>{label}</div>
+      <div style={{ color: COLORS.muted, marginBottom: 2 }}>{labels[p.kind]}</div>
       {p.kind === "TRADE" && p.gainUsd !== undefined && (
         <div style={{ color: p.gainUsd >= 0 ? COLORS.green : COLORS.red }}>
           {p.gainUsd >= 0 ? "+" : ""}
           {fmt(p.gainUsd)}
         </div>
       )}
-      <div style={{ marginTop: 2 }}>Solde : {fmt(p.balance)}</div>
+      <div style={{ marginTop: 2 }}>
+        {balanceLabel} {fmt(p.balance)}
+      </div>
     </div>
   );
 }
 
 export function BalanceChart({ data }: { data: Point[] }) {
+  const t = useTranslations("client");
+  const locale = useLocale() as Locale;
+  const fmt = (n: number) => fmtUsd(n, locale);
+  const labels: Record<Point["kind"], string> = {
+    DEPOSIT: t("deposit"),
+    WITHDRAWAL: t("withdrawal"),
+    TRADE: t("trade"),
+  };
+
   return (
     <div>
       <ResponsiveContainer width="100%" height={220}>
@@ -65,26 +86,26 @@ export function BalanceChart({ data }: { data: Point[] }) {
           <CartesianGrid stroke="#1a1f2a" />
           <XAxis dataKey="label" tick={{ fill: COLORS.muted, fontSize: 10 }} />
           <YAxis tick={{ fill: COLORS.muted, fontSize: 10 }} domain={["auto", "auto"]} />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<CustomTooltip labels={labels} fmt={fmt} balanceLabel={t("balanceAfter") + " :"} />} />
           <Line type="monotone" dataKey="balance" stroke={COLORS.green} strokeWidth={2} dot={<CustomDot />} />
         </LineChart>
       </ResponsiveContainer>
       <div className="flex gap-4 flex-wrap text-xs text-muted mt-2">
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: COLORS.blue }} />
-          Dépôt
+          {t("deposit")}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: COLORS.gold }} />
-          Retrait
+          {t("withdrawal")}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-2 h-2 rounded-full" style={{ background: COLORS.green }} />
-          Trade gagnant
+          {t("winningTrade")}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-2 h-2 rounded-full" style={{ background: COLORS.red }} />
-          Trade perdant
+          {t("losingTrade")}
         </span>
       </div>
     </div>

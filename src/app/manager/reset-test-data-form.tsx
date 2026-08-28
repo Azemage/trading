@@ -1,9 +1,11 @@
 "use client";
 
 import { useActionState, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { resetAllTestDataAction } from "./actions";
 
 export function ResetTestDataForm() {
+  const t = useTranslations("manager");
   const [state, formAction, pending] = useActionState(resetAllTestDataAction, { error: null });
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -12,11 +14,7 @@ export function ResetTestDataForm() {
       ref={formRef}
       action={formAction}
       onSubmit={(e) => {
-        if (
-          !window.confirm(
-            "Effacer TOUTES les données (clients, dépôts, retraits, trades, frais) et repartir à zéro ? Cette action est irréversible."
-          )
-        ) {
+        if (!window.confirm(t("resetConfirm"))) {
           e.preventDefault();
         }
       }}
@@ -24,12 +22,12 @@ export function ResetTestDataForm() {
     >
       <div>
         <div className="text-xs text-muted mb-1">
-          Tape <span className="text-red font-bold">RESET</span> pour confirmer
+          {t("typeToConfirm")} <span className="text-red font-bold">RESET</span> {t("toConfirmSuffix")}
         </div>
         <input name="confirm" required className="w-32" autoComplete="off" />
       </div>
       <button type="submit" disabled={pending} className="btn btn-red">
-        {pending ? "Réinitialisation…" : "🗑️ Tout réinitialiser"}
+        {pending ? t("resetting") : t("resetAllButton")}
       </button>
       {state.error && <div className="text-red text-xs w-full">{state.error}</div>}
     </form>

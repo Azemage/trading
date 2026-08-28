@@ -128,7 +128,7 @@ describe("KYC — revue manuelle", () => {
         documentNumber: "AB123456",
         idFront: { data: Buffer.from("fake pdf"), mimeType: "application/pdf" },
       })
-    ).rejects.toThrow(/format/);
+    ).rejects.toThrow(/KYC_PHOTO_UNSUPPORTED_FORMAT/);
   });
 
   it("rejette une photo trop volumineuse", async () => {
@@ -142,7 +142,7 @@ describe("KYC — revue manuelle", () => {
         documentNumber: "AB123456",
         idFront: { data: tooLarge, mimeType: "image/jpeg" },
       })
-    ).rejects.toThrow(/volumineux/);
+    ).rejects.toThrow(/KYC_PHOTO_TOO_LARGE/);
   });
 
   it("efface les photos de la base une fois la soumission approuvée", async () => {

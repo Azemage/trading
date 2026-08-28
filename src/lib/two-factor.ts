@@ -3,8 +3,9 @@ import QRCode from "qrcode";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
 import { logAudit } from "./audit";
+import { AppError } from "./app-error";
 
-export class TwoFactorError extends Error {}
+export class TwoFactorError extends AppError {}
 
 const ISSUER = "Ledger Capital";
 // Tolère une dérive d'horloge de ±30s (1 pas de temps) de part et d'autre, comme la plupart des apps 2FA.
@@ -35,10 +36,10 @@ export async function beginTwoFactorSetup(userId: string) {
 export async function confirmTwoFactorSetup(params: { userId: string; code: string }) {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: params.userId } });
   if (!user.twoFactorSecret) {
-    throw new TwoFactorError("Aucune configuration 2FA en attente — relance la configuration");
+    throw new TwoFactorError("TWO_FACTOR_NO_PENDING_SETUP");
   }
   if (!(await verifyTwoFactorCode(user.twoFactorSecret, params.code))) {
-    throw new TwoFactorError("Code invalide");
+    throw new TwoFactorError("TWO_FACTOR_INVALID_CODE");
   }
 
   await prisma.$transaction(async (tx) => {
@@ -56,7 +57,7 @@ export async function confirmTwoFactorSetup(params: { userId: string; code: stri
 export async function disableTwoFactor(params: { userId: string; password: string }) {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: params.userId } });
   const validPassword = await bcrypt.compare(params.password, user.passwordHash);
-  if (!validPassword) throw new TwoFactorError("Mot de passe incorrect");
+  if (!validPassword) throw new TwoFactorError("TWO_FACTOR_WRONG_PASSWORD");
 
   await prisma.$transaction(async (tx) => {
     await tx.user.update({

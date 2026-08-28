@@ -253,7 +253,7 @@ describe("mouvements — cas limites critiques (argent de tiers)", () => {
     const manager = await makeManager("mgr8@test.local");
     await expect(
       logManualTrade({ pnlPct: new Decimal(5), loggedById: manager.id, tradingFeeUsd: new Decimal(-1) })
-    ).rejects.toThrow(/négatifs/);
+    ).rejects.toThrow(/TRADE_NEGATIVE_FEE/);
   });
 
   it("bloque un dépôt tant que le KYC n'est pas vérifié", async () => {
@@ -305,6 +305,8 @@ describe("mouvements — cas limites critiques (argent de tiers)", () => {
     await makeEligible(dep.id);
     await approveDeposit(dep.id, manager.id);
 
-    await expect(requestWithdrawal(client.id, new Decimal(100))).rejects.toThrow(/adresse USDC/);
+    await expect(requestWithdrawal(client.id, new Decimal(100))).rejects.toThrow(
+      /MOVEMENT_USDC_ADDRESS_REQUIRED/
+    );
   });
 });

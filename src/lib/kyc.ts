@@ -1,8 +1,9 @@
 import { Role } from "@prisma/client";
 import { prisma } from "./prisma";
 import { logAudit } from "./audit";
+import { AppError } from "./app-error";
 
-export class KycError extends Error {}
+export class KycError extends AppError {}
 
 const ALLOWED_ID_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 // Limité à 1,5 Mo par photo (recto + verso + champs texte doivent tenir sous la
@@ -14,15 +15,15 @@ export interface IdPhoto {
   mimeType: string;
 }
 
-function validateIdPhoto(photo: IdPhoto, label: string) {
+function validateIdPhoto(photo: IdPhoto, side: "front" | "back") {
   if (!ALLOWED_ID_PHOTO_TYPES.includes(photo.mimeType)) {
-    throw new KycError(`${label} : format non supporté (JPEG, PNG ou WebP uniquement)`);
+    throw new KycError("KYC_PHOTO_UNSUPPORTED_FORMAT", { side });
   }
   if (photo.data.byteLength > MAX_ID_PHOTO_BYTES) {
-    throw new KycError(`${label} : fichier trop volumineux (1,5 Mo maximum)`);
+    throw new KycError("KYC_PHOTO_TOO_LARGE", { side });
   }
   if (photo.data.byteLength === 0) {
-    throw new KycError(`${label} : fichier vide`);
+    throw new KycError("KYC_PHOTO_EMPTY", { side });
   }
 }
 
@@ -42,10 +43,10 @@ export async function submitKyc(params: {
   idBack?: IdPhoto;
 }) {
   if (!params.legalName.trim() || !params.documentType.trim() || !params.documentNumber.trim()) {
-    throw new KycError("Nom légal, type et numéro de document sont requis");
+    throw new KycError("KYC_REQUIRED_FIELDS");
   }
-  if (params.idFront) validateIdPhoto(params.idFront, "Recto de la pièce d'identité");
-  if (params.idBack) validateIdPhoto(params.idBack, "Verso de la pièce d'identité");
+  if (params.idFront) validateIdPhoto(params.idFront, "front");
+  if (params.idBack) validateIdPhoto(params.idBack, "back");
 
   return prisma.$transaction(async (tx) => {
     const latest = await tx.kycSubmission.findFirst({
@@ -53,11 +54,7 @@ export async function submitKyc(params: {
       orderBy: { submittedAt: "desc" },
     });
     if (latest && latest.status !== "REJECTED") {
-      throw new KycError(
-        latest.status === "APPROVED"
-          ? "Ta vérification KYC est déjà approuvée"
-          : "Une soumission est déjà en attente de revue"
-      );
+      throw new KycError(latest.status === "APPROVED" ? "KYC_ALREADY_APPROVED" : "KYC_ALREADY_PENDING");
     }
 
     const submission = await tx.kycSubmission.create({
@@ -95,14 +92,14 @@ export async function reviewKyc(params: {
   managerId: string;
 }) {
   if (!params.approve && !params.reason?.trim()) {
-    throw new KycError("Un motif est requis pour rejeter une soumission KYC");
+    throw new KycError("KYC_REJECT_REASON_REQUIRED");
   }
 
   return prisma.$transaction(async (tx) => {
     const submission = await tx.kycSubmission.findUnique({ where: { id: params.submissionId } });
-    if (!submission) throw new KycError("Soumission introuvable");
+    if (!submission) throw new KycError("KYC_SUBMISSION_NOT_FOUND");
     if (submission.status !== "PENDING") {
-      throw new KycError("Cette soumission n'est plus en attente de revue");
+      throw new KycError("KYC_NOT_PENDING");
     }
 
     // Les photos ont déjà été envoyées par email au moment de la soumission

@@ -3,14 +3,15 @@ import bcrypt from "bcryptjs";
 import { Prisma, Role } from "@prisma/client";
 import { prisma } from "./prisma";
 import { computeNav, d } from "./nav";
+import { AppError } from "./app-error";
 
-export class TestClientError extends Error {}
+export class TestClientError extends AppError {}
 
 async function lockPoolState(tx: Prisma.TransactionClient) {
   const rows = await tx.$queryRaw<
     { id: number; totalAssets: Decimal; totalParts: Decimal }[]
   >`SELECT * FROM pool_state WHERE id = 1 FOR UPDATE`;
-  if (!rows[0]) throw new TestClientError("pool_state introuvable");
+  if (!rows[0]) throw new TestClientError("POOL_STATE_NOT_FOUND");
   return rows[0];
 }
 
@@ -29,12 +30,12 @@ export async function createTestClient(params: {
   managerId: string;
 }) {
   if (params.initialDeposit.lessThan(0)) {
-    throw new TestClientError("Le dépôt initial ne peut pas être négatif");
+    throw new TestClientError("TEST_CLIENT_NEGATIVE_DEPOSIT");
   }
 
   const email = params.email.trim().toLowerCase();
   const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) throw new TestClientError("Un compte existe déjà pour cet email");
+  if (existing) throw new TestClientError("REGISTER_EMAIL_TAKEN");
 
   const passwordHash = await bcrypt.hash(params.password, 12);
 

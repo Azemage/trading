@@ -52,7 +52,7 @@ export async function logManualTrade(params: {
     });
 
     if (result.totalAssetsAfterNet.lessThan(0)) {
-      throw new TradeError("TRADE_FEE_EXCEEDS_POOL");
+      throw new TradeError("TRADE_RESULT_EXCEEDS_POOL");
     }
 
     await tx.poolState.update({

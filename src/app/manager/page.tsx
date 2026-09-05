@@ -81,7 +81,7 @@ export default async function ManagerView() {
         </div>
         <div className="card">
           <div className="label-mono">{t("tradingFeeCumulative")}</div>
-          <div className="text-xl font-bold text-red mt-1">{fmt(tradingFeeAgg._sum.amount?.toNumber() ?? 0)}</div>
+          <div className="text-xl font-bold text-muted mt-1">{fmt(tradingFeeAgg._sum.amount?.toNumber() ?? 0)}</div>
         </div>
         <div className="card">
           <div className="label-mono">{t("pendingDeposits")}</div>
@@ -334,7 +334,7 @@ export default async function ManagerView() {
                         {e.gainUsd >= 0 ? "+" : ""}
                         {fmt(e.gainUsd)}
                       </td>
-                      <td className="p-1.5 text-right text-red">{e.tradingFeeUsd > 0 ? fmt(e.tradingFeeUsd) : "—"}</td>
+                      <td className="p-1.5 text-right text-muted">{e.tradingFeeUsd > 0 ? fmt(e.tradingFeeUsd) : "—"}</td>
                       <td className="p-1.5 text-right text-gold">{e.fee > 0 ? fmt(e.fee) : "—"}</td>
                     </tr>
                   );

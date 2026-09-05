@@ -71,17 +71,19 @@ describe("fiche de calcul client — répartition des frais de trading vs perfor
     const feeEntries = await prisma.feeLedger.findMany({ where: { tradeId: trade.id } });
     const actualTradingFee = feeEntries.find((f) => f.type === "TRADING")?.amount.toNumber() ?? 0;
     const actualPerfFee = feeEntries.find((f) => f.type === "PERFORMANCE")?.amount.toNumber() ?? 0;
+    // Frais de trading purement indicatifs (non déduits) : perf fee = 30% × (1000×5%) = 15.
     expect(actualTradingFee).toBeCloseTo(20, 6);
-    expect(actualPerfFee).toBeCloseTo(9, 6);
+    expect(actualPerfFee).toBeCloseTo(15, 6);
 
     const { entries } = await buildClientLedger(client.id);
     const tradeEntry = entries.find((e) => e.kind === "TRADE");
     if (tradeEntry?.kind !== "TRADE") throw new Error("trade entry not found");
 
     // Le client détient 100% des parts : sa part de chaque frais doit être exacte.
+    // Le frais de trading est indicatif seulement et n'affecte pas feeUsd (= perfFeeUsd).
     expect(tradeEntry.tradingFeeUsd).toBeCloseTo(actualTradingFee, 6);
     expect(tradeEntry.perfFeeUsd).toBeCloseTo(actualPerfFee, 6);
-    expect(tradeEntry.feeUsd).toBeCloseTo(actualTradingFee + actualPerfFee, 6);
+    expect(tradeEntry.feeUsd).toBeCloseTo(actualPerfFee, 6);
   });
 
   it("répartit les frais au prorata entre deux clients de parts inégales", async () => {

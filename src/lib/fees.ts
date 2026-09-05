@@ -18,10 +18,14 @@ export interface TradeApplication {
  * fee calculée UNIQUEMENT sur les gains au-dessus du high-water mark (évite
  * de facturer deux fois une même reprise après une perte).
  *
- * `tradingFeeUsd` (frais prélevés par la/les plateformes de trading — spread,
- * financement, frais d'exécution...) est déduit AVANT le calcul du % d'impact
- * sur l'AUM net et donc avant la performance fee : le gestionnaire ne facture
- * jamais sa part de performance sur des gains déjà consommés par ces frais.
+ * `pnlPct` est le résultat déjà net des frais de la plateforme de trading
+ * (spread, financement, frais d'exécution...) : ces frais sont couverts et
+ * déduits directement par la plateforme avant même que le gestionnaire ne
+ * connaisse son résultat, donc `pnlPct` les reflète déjà. `tradingFeeUsd` est
+ * conservé uniquement à titre indicatif/comptable (tracé dans le journal des
+ * frais) et n'est PAS déduit une seconde fois ici — seule la performance fee
+ * (30% des gains au-dessus du high-water mark) est réellement prélevée sur
+ * l'AUM.
  */
 export function applyTradeResult(params: {
   totalAssetsBefore: Decimalish;
@@ -40,7 +44,9 @@ export function applyTradeResult(params: {
     ? totalAssetsBefore.dividedBy(totalParts)
     : new Decimal(1);
 
-  const totalAssetsAfterGross = totalAssetsBefore.times(pnlFraction.plus(1)).minus(tradingFeeUsd);
+  // tradingFeeUsd n'est volontairement pas soustrait ici : il est purement
+  // indicatif (voir docstring ci-dessus).
+  const totalAssetsAfterGross = totalAssetsBefore.times(pnlFraction.plus(1));
   const navAfterGross = totalParts.greaterThan(0)
     ? totalAssetsAfterGross.dividedBy(totalParts)
     : new Decimal(1);

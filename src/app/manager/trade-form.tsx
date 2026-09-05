@@ -10,9 +10,7 @@ function computePreview(
   exitPrice: string,
   positionSizePct: string,
   direction: "LONG" | "SHORT",
-  leverage: number,
-  tradingFeeUsd: number,
-  currentTotalAssets: number
+  leverage: number
 ) {
   const entry = parseFloat(entryPrice);
   const exit = parseFloat(exitPrice);
@@ -23,9 +21,7 @@ function computePreview(
   const priceChangePct = direction === "SHORT" ? -rawChangePct : rawChangePct;
   const marginReturnPct = Math.max(priceChangePct * leverage, -100);
   const pnlPctOfAum = (marginReturnPct * size) / 100;
-  const feePct = currentTotalAssets > 0 ? (tradingFeeUsd / currentTotalAssets) * 100 : 0;
-  const pnlPctOfAumNet = pnlPctOfAum - feePct;
-  return { priceChangePct, marginReturnPct, pnlPctOfAum, pnlPctOfAumNet };
+  return { priceChangePct, marginReturnPct, pnlPctOfAum };
 }
 
 export function TradeForm({ currentTotalAssets }: { currentTotalAssets: number }) {
@@ -57,17 +53,8 @@ export function TradeForm({ currentTotalAssets }: { currentTotalAssets: number }
   }
 
   const preview = useMemo(
-    () =>
-      computePreview(
-        entryPrice,
-        exitPrice,
-        positionSizePct,
-        direction,
-        leverage,
-        parseFloat(tradingFeeUsd) || 0,
-        currentTotalAssets
-      ),
-    [entryPrice, exitPrice, positionSizePct, direction, leverage, tradingFeeUsd, currentTotalAssets]
+    () => computePreview(entryPrice, exitPrice, positionSizePct, direction, leverage),
+    [entryPrice, exitPrice, positionSizePct, direction, leverage]
   );
 
   return (
@@ -222,16 +209,6 @@ export function TradeForm({ currentTotalAssets }: { currentTotalAssets: number }
                   {preview.pnlPctOfAum >= 0 ? "+" : ""}
                   {preview.pnlPctOfAum.toFixed(3)}%
                 </span>
-                {preview.pnlPctOfAumNet !== preview.pnlPctOfAum && (
-                  <>
-                    {" — "}
-                    {t("netOfTradingFees")}{" "}
-                    <span className={preview.pnlPctOfAumNet >= 0 ? "text-green" : "text-red"}>
-                      {preview.pnlPctOfAumNet >= 0 ? "+" : ""}
-                      {preview.pnlPctOfAumNet.toFixed(3)}%
-                    </span>
-                  </>
-                )}
               </div>
             </div>
           )}

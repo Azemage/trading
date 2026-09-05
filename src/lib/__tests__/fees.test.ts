@@ -55,9 +55,11 @@ describe("applyTradeResult — performance fee au high-water mark", () => {
     expect(r.totalAssetsAfterNet.toString()).toBe("1056");
   });
 
-  it("déduit les frais de trading avant de calculer la performance fee", () => {
-    // +10% brut => 1100, mais 20$ de frais de trading déduits d'abord => 1080 net de trading.
-    // Gain facturable au-dessus du HWM=1 : (1080-1000)=80 ; fee = 30% => 24.
+  it("les frais de trading sont tracés mais n'influencent jamais le calcul (indicatif uniquement)", () => {
+    // pnlPct est déjà net des frais de la plateforme de trading : +10% => 1100,
+    // que 20$ de frais de trading soient précisés ou non ne doit rien changer
+    // au résultat — ils sont uniquement conservés pour le suivi comptable.
+    // Gain facturable au-dessus du HWM=1 : (1100-1000)=100 ; fee = 30% => 30.
     const r = applyTradeResult({
       totalAssetsBefore: 1000,
       totalParts: 1000,
@@ -66,13 +68,12 @@ describe("applyTradeResult — performance fee au high-water mark", () => {
       tradingFeeUsd: 20,
     });
     expect(r.tradingFeeUsd.toString()).toBe("20");
-    expect(r.totalAssetsAfterGross.toString()).toBe("1080");
-    expect(r.fee.toString()).toBe("24");
-    expect(r.totalAssetsAfterNet.toString()).toBe("1056");
+    expect(r.totalAssetsAfterGross.toString()).toBe("1100");
+    expect(r.fee.toString()).toBe("30");
+    expect(r.totalAssetsAfterNet.toString()).toBe("1070");
   });
 
-  it("les frais de trading peuvent annuler entièrement la performance fee", () => {
-    // +10% brut => 1100, mais 100$ de frais de trading => 1000 net, pile le HWM : aucune perf fee.
+  it("un gros montant de frais de trading indicatif ne réduit pas non plus la performance fee", () => {
     const r = applyTradeResult({
       totalAssetsBefore: 1000,
       totalParts: 1000,
@@ -80,8 +81,8 @@ describe("applyTradeResult — performance fee au high-water mark", () => {
       highWaterMark: 1,
       tradingFeeUsd: 100,
     });
-    expect(r.fee.toString()).toBe("0");
-    expect(r.totalAssetsAfterNet.toString()).toBe("1000");
+    expect(r.fee.toString()).toBe("30");
+    expect(r.totalAssetsAfterNet.toString()).toBe("1070");
   });
 
   it("sans frais de trading précisés, le comportement est inchangé (0 par défaut)", () => {

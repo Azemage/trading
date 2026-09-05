@@ -162,8 +162,8 @@ export default async function ClientView() {
                         {e.gainUsd >= 0 ? "+" : ""}
                         {fmt(e.gainUsd)}
                       </td>
-                      <td className="p-1.5 text-right text-red">
-                        {e.tradingFeeUsd > 0.005 ? `-${fmt(e.tradingFeeUsd)}` : "—"}
+                      <td className="p-1.5 text-right text-muted">
+                        {e.tradingFeeUsd > 0.005 ? fmt(e.tradingFeeUsd) : "—"}
                       </td>
                       <td className="p-1.5 text-right text-gold">
                         {e.perfFeeUsd > 0.005 ? `-${fmt(e.perfFeeUsd)}` : "—"}

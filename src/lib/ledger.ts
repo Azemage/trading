@@ -136,9 +136,10 @@ export async function buildClientLedger(clientId: string) {
         kind: "TRADE";
         navBefore: number;
         navAfter: number;
-        navAfterGross: number;
         pnlPct: number;
         pair: string | null;
+        totalAssetsBefore: number;
+        tradingFeeUsd: number;
       };
 
   const raw: RawEvent[] = [
@@ -156,13 +157,16 @@ export async function buildClientLedger(clientId: string) {
       const pnlPct = t.pnlPct.toNumber();
       const totalParts = t.totalPartsAtTrade.toNumber();
       const tradingFeeUsd = t.tradingFeeUsd?.toNumber() ?? 0;
-      // NAV après déduction des seuls frais de trading (avant performance fee) :
-      // reconstitué à partir de l'AUM avant trade, pour pouvoir isoler la part
-      // de chaque frais dans l'impact total sur le solde du client.
-      const totalAssetsBefore = navBefore * totalParts;
-      const navAfterGross =
-        totalParts > 0 ? (totalAssetsBefore * (1 + pnlPct / 100) - tradingFeeUsd) / totalParts : navAfter;
-      return { date: t.timestamp, kind: "TRADE" as const, navBefore, navAfter, navAfterGross, pnlPct, pair: t.pair };
+      return {
+        date: t.timestamp,
+        kind: "TRADE" as const,
+        navBefore,
+        navAfter,
+        pnlPct,
+        pair: t.pair,
+        totalAssetsBefore: navBefore * totalParts,
+        tradingFeeUsd,
+      };
     }),
   ];
   raw.sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -178,14 +182,18 @@ export async function buildClientLedger(clientId: string) {
       balance = balanceBefore - r.amount;
       return { kind: "WITHDRAWAL", date: r.date, amount: r.amount, balanceBefore, balanceAfter: balance };
     }
-    // Solde brut (avant tout frais) : le % de résultat appliqué directement au solde.
+    // Solde brut (avant performance fee) : le % de résultat appliqué directement au
+    // solde. Les frais de trading sont déjà couverts par la plateforme et reflétés
+    // dans ce % — ils ne sont pas déduits une deuxième fois ici.
     const grossBalanceAfter = balanceBefore * (1 + r.pnlPct / 100);
-    // Solde après frais de trading uniquement (avant performance fee).
-    const afterTradingFee = r.navBefore > 0 ? balanceBefore * (r.navAfterGross / r.navBefore) : balanceBefore;
-    // Solde net (après tous les frais) : même ratio NAV net que celui réellement appliqué au pool.
+    // Solde net (après performance fee) : même ratio NAV net que celui réellement
+    // appliqué au pool.
     balance = r.navBefore > 0 ? balanceBefore * (r.navAfter / r.navBefore) : balanceBefore;
-    const tradingFeeUsd = Math.max(grossBalanceAfter - afterTradingFee, 0);
-    const perfFeeUsd = Math.max(afterTradingFee - balance, 0);
+    const perfFeeUsd = Math.max(grossBalanceAfter - balance, 0);
+    // Frais de trading : purement indicatif (part du client dans le montant
+    // déclaré par le gestionnaire), n'affecte pas son solde.
+    const tradingFeeUsd =
+      r.totalAssetsBefore > 0 ? (balanceBefore / r.totalAssetsBefore) * r.tradingFeeUsd : 0;
     return {
       kind: "TRADE",
       date: r.date,
@@ -194,7 +202,7 @@ export async function buildClientLedger(clientId: string) {
       grossGainUsd: grossBalanceAfter - balanceBefore,
       tradingFeeUsd,
       perfFeeUsd,
-      feeUsd: tradingFeeUsd + perfFeeUsd,
+      feeUsd: perfFeeUsd,
       gainUsd: balance - balanceBefore,
       balanceBefore,
       balanceAfter: balance,

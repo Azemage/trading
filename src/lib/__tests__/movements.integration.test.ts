@@ -223,7 +223,7 @@ describe("mouvements — cas limites critiques (argent de tiers)", () => {
     expect(trade.navAfter.greaterThan(trade.navBefore)).toBe(true);
   });
 
-  it("déduit les frais de trading avant la performance fee et les trace dans le fee ledger", async () => {
+  it("trace les frais de trading dans le fee ledger sans les déduire du calcul (indicatif uniquement)", async () => {
     const client = await makeClient("tradingfee@test.local");
     const manager = await makeManager("mgr7@test.local");
 
@@ -232,21 +232,21 @@ describe("mouvements — cas limites critiques (argent de tiers)", () => {
     await approveDeposit(dep.id, manager.id); // NAV = 1, HWM = 1
 
     const trade = await logManualTrade({
-      pnlPct: new Decimal(10), // +10% brut => 1100
+      pnlPct: new Decimal(10), // +10% déjà net des frais de la plateforme => 1100
       loggedById: manager.id,
-      tradingFeeUsd: new Decimal(20), // 1080 net de trading => perf fee sur (1080-1000)*30% = 24
+      tradingFeeUsd: new Decimal(20), // indicatif seulement => perf fee sur (1100-1000)*30% = 30
     });
 
     expect(trade.tradingFeeUsd?.toString()).toBe("20");
 
     const pool = await prisma.poolState.findUniqueOrThrow({ where: { id: 1 } });
-    expect(pool.totalAssets.toString()).toBe("1056"); // 1080 - 24
+    expect(pool.totalAssets.toString()).toBe("1070"); // 1100 - 30 (les 20 de frais de trading ne sont pas déduits)
 
     const feeEntries = await prisma.feeLedger.findMany({ where: { tradeId: trade.id } });
     const tradingEntry = feeEntries.find((f) => f.type === "TRADING");
     const perfEntry = feeEntries.find((f) => f.type === "PERFORMANCE");
     expect(tradingEntry?.amount.toString()).toBe("20");
-    expect(perfEntry?.amount.toString()).toBe("24");
+    expect(perfEntry?.amount.toString()).toBe("30");
   });
 
   it("refuse des frais de trading négatifs", async () => {

@@ -231,11 +231,19 @@ async function buildClientTimelines(): Promise<Map<string, ClientTimeline>> {
  * aux parts dont la portion décimale tronquée était la plus grande — donc
  * si un centime doit être arrondi "vers le haut" quelque part, il est
  * automatiquement compensé par un arrondi "vers le bas" ailleurs.
+ *
+ * Filet de sécurité symétrique : si la somme des montants exacts fournis
+ * s'écarte légèrement de `targetTotal` (dérive résiduelle de calcul) au
+ * point que même l'arrondi au centime inférieur dépasse la cible, les
+ * centimes en trop sont retirés aux parts dont le reste tronqué était le
+ * plus PETIT — la somme finale reconstitue toujours exactement la cible,
+ * jamais un dépassement ni un manque.
  */
 function allocateCentsByLargestRemainder(shares: { key: string; amount: number }[], targetTotal: number): Map<string, number> {
   const targetCents = Math.round(targetTotal * 100);
   const result = new Map<string, number>();
-  if (targetCents <= 0 || shares.length === 0) {
+  if (shares.length === 0) return result;
+  if (targetCents <= 0) {
     for (const s of shares) result.set(s.key, 0);
     return result;
   }
@@ -247,14 +255,26 @@ function allocateCentsByLargestRemainder(shares: { key: string; amount: number }
   });
 
   const baseSum = withRemainders.reduce((sum, s) => sum + s.floorCents, 0);
-  const leftover = Math.max(0, Math.min(targetCents - baseSum, withRemainders.length));
-
   for (const s of withRemainders) result.set(s.key, s.floorCents);
 
-  const byLargestRemainder = [...withRemainders].sort((a, b) => b.remainder - a.remainder);
-  for (let i = 0; i < leftover; i++) {
-    const key = byLargestRemainder[i].key;
-    result.set(key, (result.get(key) ?? 0) + 1);
+  const diff = targetCents - baseSum;
+  if (diff > 0) {
+    const byLargestRemainder = [...withRemainders].sort((a, b) => b.remainder - a.remainder);
+    for (let i = 0; i < Math.min(diff, byLargestRemainder.length); i++) {
+      const key = byLargestRemainder[i].key;
+      result.set(key, (result.get(key) ?? 0) + 1);
+    }
+  } else if (diff < 0) {
+    const bySmallestRemainder = [...withRemainders].sort((a, b) => a.remainder - b.remainder);
+    let toRemove = -diff;
+    for (const s of bySmallestRemainder) {
+      if (toRemove <= 0) break;
+      const current = result.get(s.key) ?? 0;
+      if (current > 0) {
+        result.set(s.key, current - 1);
+        toRemove -= 1;
+      }
+    }
   }
 
   return result;
@@ -324,8 +344,18 @@ async function computeReconciledTradeFees(
       })),
       tradingFeeTotal
     );
+    // Comme pour le frais de trading : chaque part est normalisée par rapport
+    // au poids du client dans le pool (balanceBefore / totalBalanceBefore),
+    // PAS par son propre calcul brut/net indépendant. Ce dernier peut dériver
+    // légèrement du vrai total (arrondis accumulés sur les trades précédents
+    // dans la reconstitution du solde de chaque client) ; normaliser par
+    // rapport au total réel garantit que la somme des parts vaut TOUJOURS
+    // exactement fees.performance, sans possibilité de dépassement.
     const perfCents = allocateCentsByLargestRemainder(
-      participants.map((p) => ({ key: p.clientId, amount: Math.max(p.grossBalanceAfter - p.balanceAfter, 0) })),
+      participants.map((p) => ({
+        key: p.clientId,
+        amount: totalBalanceBefore > 0 ? (p.balanceBefore / totalBalanceBefore) * fees.performance : 0,
+      })),
       fees.performance
     );
 

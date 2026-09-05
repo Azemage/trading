@@ -178,4 +178,64 @@ describe("fiche de calcul client — répartition des frais de trading vs perfor
       actualPerfFeeCents
     );
   });
+
+  it("reste exact même si le navAfter stocké d'un trade ne correspond plus exactement au calcul brut/net (ex: trade historique pré-correctif)", async () => {
+    // Simule un trade dont le navAfter en base a "dérivé" par rapport à ce
+    // qu'un recalcul brut - net donnerait aujourd'hui (par ex. un trade
+    // enregistré avant un changement de formule) : le calcul naïf
+    // grossBalanceAfter - balanceAfter par client ne correspond alors plus
+    // exactement au frais réellement prélevé (FeeLedger). La réconciliation
+    // doit malgré tout retomber pile sur le montant AUTHENTIQUE de FeeLedger,
+    // jamais sur la somme (fausse) des calculs indépendants par client.
+    const clientA = await makeClient("ledgerdrift-a@test.local");
+    const clientB = await makeClient("ledgerdrift-b@test.local");
+    const clientC = await makeClient("ledgerdrift-c@test.local");
+    const manager = await makeManager("ledgerdriftmgr@test.local");
+
+    for (const [client, amount] of [
+      [clientA, 300],
+      [clientB, 300],
+      [clientC, 400],
+    ] as const) {
+      const dep = await requestDeposit(client.id, new Decimal(amount));
+      await makeEligible(dep.id);
+      await approveDeposit(dep.id, manager.id);
+    }
+
+    const trade = await logManualTrade({
+      pnlPct: new Decimal(10),
+      tradingFeeUsd: new Decimal(0.1),
+      loggedById: manager.id,
+    });
+
+    const feeEntriesBefore = await prisma.feeLedger.findMany({ where: { tradeId: trade.id } });
+    const authoritativePerfFee = feeEntriesBefore.find((f) => f.type === "PERFORMANCE")?.amount.toNumber() ?? 0;
+    const authoritativeTradingFee = feeEntriesBefore.find((f) => f.type === "TRADING")?.amount.toNumber() ?? 0;
+
+    // Corrompt volontairement le navAfter stocké (simule un trade dont le
+    // calcul historique différait de la formule actuelle) SANS toucher aux
+    // FeeLedger déjà enregistrés, qui restent la seule source de vérité.
+    await prisma.trade.update({
+      where: { id: trade.id },
+      data: { navAfter: trade.navAfter.minus(new Decimal("0.005")) },
+    });
+
+    const [ledgerA, ledgerB, ledgerC] = await Promise.all([
+      buildClientLedger(clientA.id),
+      buildClientLedger(clientB.id),
+      buildClientLedger(clientC.id),
+    ]);
+    const [tradeA, tradeB, tradeC] = [ledgerA, ledgerB, ledgerC].map((l) => l.entries.find((e) => e.kind === "TRADE"));
+    if (tradeA?.kind !== "TRADE" || tradeB?.kind !== "TRADE" || tradeC?.kind !== "TRADE") {
+      throw new Error("trade entry not found");
+    }
+
+    const toCents = (n: number) => Math.round(n * 100);
+    expect(toCents(tradeA.perfFeeUsd) + toCents(tradeB.perfFeeUsd) + toCents(tradeC.perfFeeUsd)).toBe(
+      toCents(authoritativePerfFee)
+    );
+    expect(toCents(tradeA.tradingFeeUsd) + toCents(tradeB.tradingFeeUsd) + toCents(tradeC.tradingFeeUsd)).toBe(
+      toCents(authoritativeTradingFee)
+    );
+  });
 });

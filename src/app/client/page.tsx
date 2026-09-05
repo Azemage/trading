@@ -119,7 +119,8 @@ export default async function ClientView() {
                   <th className="text-left p-1.5">{t("date")}</th>
                   <th className="text-left p-1.5">{t("event")}</th>
                   <th className="text-right p-1.5">{t("impact")}</th>
-                  <th className="text-right p-1.5">{t("fees")}</th>
+                  <th className="text-right p-1.5">{t("tradingFee")}</th>
+                  <th className="text-right p-1.5">{t("perfFee")}</th>
                   <th className="text-right p-1.5">{t("balanceAfter")}</th>
                 </tr>
               </thead>
@@ -132,6 +133,7 @@ export default async function ClientView() {
                         <td className="p-1.5 text-blue">{t("deposit")}</td>
                         <td className="p-1.5 text-right text-green">+{fmt(e.amount)}</td>
                         <td className="p-1.5 text-right text-muted">—</td>
+                        <td className="p-1.5 text-right text-muted">—</td>
                         <td className="p-1.5 text-right">{fmt(e.balanceAfter)}</td>
                       </tr>
                     );
@@ -142,6 +144,7 @@ export default async function ClientView() {
                         <td className="p-1.5 text-muted">{fmtDateTime(e.date, loc)}</td>
                         <td className="p-1.5 text-gold">{t("withdrawal")}</td>
                         <td className="p-1.5 text-right text-red">-{fmt(e.amount)}</td>
+                        <td className="p-1.5 text-right text-muted">—</td>
                         <td className="p-1.5 text-right text-muted">—</td>
                         <td className="p-1.5 text-right">{fmt(e.balanceAfter)}</td>
                       </tr>
@@ -159,7 +162,12 @@ export default async function ClientView() {
                         {e.gainUsd >= 0 ? "+" : ""}
                         {fmt(e.gainUsd)}
                       </td>
-                      <td className="p-1.5 text-right text-gold">{e.feeUsd > 0.005 ? `-${fmt(e.feeUsd)}` : "—"}</td>
+                      <td className="p-1.5 text-right text-red">
+                        {e.tradingFeeUsd > 0.005 ? `-${fmt(e.tradingFeeUsd)}` : "—"}
+                      </td>
+                      <td className="p-1.5 text-right text-gold">
+                        {e.perfFeeUsd > 0.005 ? `-${fmt(e.perfFeeUsd)}` : "—"}
+                      </td>
                       <td className="p-1.5 text-right">{fmt(e.balanceAfter)}</td>
                     </tr>
                   );

@@ -15,7 +15,8 @@ export async function GET() {
     detail: e.kind === "TRADE" ? (e.pair ?? "") : "",
     pnlPct: e.kind === "TRADE" ? e.pnlPct : "",
     impact: e.kind === "TRADE" ? e.gainUsd : e.amount,
-    fraisPerf: e.kind === "TRADE" ? e.feeUsd : "",
+    fraisTrading: e.kind === "TRADE" ? e.tradingFeeUsd : "",
+    fraisPerf: e.kind === "TRADE" ? e.perfFeeUsd : "",
     soldeApres: e.balanceAfter,
   }));
 
@@ -25,7 +26,8 @@ export async function GET() {
     { key: "detail", header: "Détail" },
     { key: "pnlPct", header: "Résultat %" },
     { key: "impact", header: "Impact $" },
-    { key: "fraisPerf", header: "Frais $" },
+    { key: "fraisTrading", header: "Frais trading $" },
+    { key: "fraisPerf", header: "Frais perf. $" },
     { key: "soldeApres", header: "Solde après $" },
   ]);
 

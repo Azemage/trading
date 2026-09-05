@@ -14,6 +14,7 @@ import { adjustPoolAssets, logManualTrade } from "@/lib/trades";
 import { ALLOWED_LEVERAGES, computePositionPnlPct } from "@/lib/position";
 import { createTestClient } from "@/lib/test-clients";
 import { resetAllTestData } from "@/lib/admin-reset";
+import { withdrawPerformanceFees } from "@/lib/fee-withdrawal";
 import { reviewKyc } from "@/lib/kyc";
 import { sendEmail, emailTemplates, getEmailT } from "@/lib/email";
 import { translateActionError } from "@/lib/error-i18n";
@@ -246,6 +247,32 @@ export async function reviewKycAction(submissionId: string, formData: FormData) 
   await sendEmail({ to: submission.client.email, subject, html });
 
   revalidatePath("/manager");
+}
+
+export async function withdrawPerformanceFeesAction(
+  _prevState: { error: string | null; success: string | null },
+  formData: FormData
+): Promise<{ error: string | null; success: string | null }> {
+  const t = await getTranslations("manager");
+  try {
+    const manager = await requireManager();
+    const amount = Number(formData.get("amount"));
+    const note = String(formData.get("note") ?? "").trim();
+    if (Number.isNaN(amount)) {
+      return { error: await translateActionError(new AppError("MOVEMENT_INVALID_AMOUNT")), success: null };
+    }
+
+    const withdrawal = await withdrawPerformanceFees({
+      amount: new Decimal(amount),
+      managerId: manager.id,
+      note: note || undefined,
+    });
+
+    revalidatePath("/manager");
+    return { error: null, success: t("withdrawSuccess", { amount: withdrawal.amount.toString() }) };
+  } catch (e) {
+    return { error: await translateActionError(e), success: null };
+  }
 }
 
 export async function resetAllTestDataAction(

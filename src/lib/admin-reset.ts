@@ -14,6 +14,7 @@ export class AdminResetError extends Error {}
 export async function resetAllTestData(managerId: string) {
   await prisma.$transaction(async (tx) => {
     await tx.auditLog.deleteMany();
+    await tx.feeWithdrawal.deleteMany();
     await tx.feeLedger.deleteMany();
     await tx.trade.deleteMany();
     await tx.navSnapshot.deleteMany();

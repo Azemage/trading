@@ -169,9 +169,19 @@
   "manager": {
     "title": "Área de gestor",
     "auditLog": "Registro de auditoría →",
-    "perfFeeRevenue": "Ingresos por comisión de rendimiento (acumulado)",
+    "aumTotal": "AUM total (clientes)",
+    "platformTotal": "Total en la plataforma de trading",
+    "perfFeeAvailable": "Comisión de rendimiento disponible para retirar",
+    "perfFeeRevenue": "Ingresos por comisión de rendimiento (total ganado)",
     "tradingFeeCumulative": "Comisiones de trading (acumulado, informativo)",
     "pendingDeposits": "Depósitos pendientes",
+    "withdrawFeesTitle": "Retirar comisiones de rendimiento",
+    "withdrawFeesHint": "Las comisiones de rendimiento cobradas nunca salen físicamente de la plataforma de trading: solo se restan del AUM en el cálculo interno. Este retiro no afecta al AUM ni a las participaciones de los clientes — solo registra que has sacado realmente ese dinero de la plataforma (debe corresponder a un retiro real de tu parte). Una vez retirado todo, \"Total en la plataforma de trading\" vuelve a ser igual al \"AUM total\".",
+    "withdrawAmountLabel": "Monto a retirar ($)",
+    "withdrawAllButton": "Retirar todo (${amount})",
+    "withdrawing": "Retirando…",
+    "withdrawSubmit": "Retirar →",
+    "withdrawSuccess": "{amount}$ de comisión de rendimiento marcados como retirados.",
     "logTradeTitle": "Registrar un trade / resultado del día (entrada manual)",
     "logTradeHint": "El resultado introducido ya es neto de las comisiones de la plataforma de trading (spread, financiación, ejecución): la plataforma las cubre y las deduce antes de que conozcas tu resultado, así que no las deduzcas tú mismo. Luego se cobra una comisión de rendimiento del 30% sobre las ganancias por encima del high-water mark; ninguna comisión en caso contrario.",
     "testTools": "Herramientas de prueba",
@@ -277,7 +287,8 @@
     "actionKycRejected": "KYC rechazado",
     "actionTwoFactorEnabled": "2FA activada",
     "actionTwoFactorDisabled": "2FA desactivada",
-    "actionPasswordReset": "Contraseña restablecida"
+    "actionPasswordReset": "Contraseña restablecida",
+    "actionPerfFeeWithdrawn": "Comisión de rendimiento retirada"
   },
   "errors": {
     "UNKNOWN": "Error desconocido",
@@ -335,7 +346,9 @@
     "TEST_CLIENT_NAME_REQUIRED": "Se requiere el nombre",
     "TEST_CLIENT_EMAIL_REQUIRED": "Se requiere el email",
     "TEST_CLIENT_PASSWORD_TOO_SHORT": "Contraseña: 8 caracteres mínimo",
-    "RESET_CONFIRMATION_MISMATCH": "Escribe exactamente \"RESET\" para confirmar"
+    "RESET_CONFIRMATION_MISMATCH": "Escribe exactamente \"RESET\" para confirmar",
+    "FEE_WITHDRAWAL_INVALID_AMOUNT": "El monto a retirar debe ser estrictamente positivo",
+    "FEE_WITHDRAWAL_EXCEEDS_AVAILABLE": "Este monto supera la comisión de rendimiento disponible para retirar"
   },
   "emails": {
     "footer": "Ledger Capital — este email es automático, no responder.",

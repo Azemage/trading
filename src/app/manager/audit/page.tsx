@@ -41,6 +41,7 @@ export default async function AuditLogPage({
     "2fa.enabled": t("actionTwoFactorEnabled"),
     "2fa.disabled": t("actionTwoFactorDisabled"),
     "user.password_reset": t("actionPasswordReset"),
+    "fee.performance_withdrawn": t("actionPerfFeeWithdrawn"),
   };
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));

@@ -15,8 +15,10 @@ import { PoolAdjustForm } from "./pool-adjust-form";
 import { CreateTestClientForm } from "./create-test-client-form";
 import { ResetTestDataForm } from "./reset-test-data-form";
 import { buildManagerLedger } from "@/lib/ledger";
+import { getPerformanceFeeSummary } from "@/lib/fee-withdrawal";
 import { fmtUsd, fmtDateTime } from "@/lib/format";
 import { USDC_NETWORK_LABELS, type UsdcNetworkValue } from "@/lib/usdc";
+import { WithdrawFeeForm } from "./withdraw-fee-form";
 import type { Locale } from "@/i18n/config";
 
 export default async function ManagerView() {
@@ -24,7 +26,7 @@ export default async function ManagerView() {
   if (!session?.user) redirect("/login");
   if (session.user.role !== "MANAGER") redirect("/client");
 
-  const [t, locale, pool, pendingDeposits, pendingWithdrawals, feeAgg, tradingFeeAgg, holdings, ledger, pendingKyc] =
+  const [t, locale, pool, pendingDeposits, pendingWithdrawals, feeSummary, tradingFeeAgg, holdings, ledger, pendingKyc] =
     await Promise.all([
       getTranslations("manager"),
       getLocale(),
@@ -39,7 +41,7 @@ export default async function ManagerView() {
         include: { client: { select: { name: true, email: true, usdcNetwork: true, usdcAddress: true } } },
         orderBy: { requestedAt: "asc" },
       }),
-      prisma.feeLedger.aggregate({ where: { type: "PERFORMANCE" }, _sum: { amount: true } }),
+      getPerformanceFeeSummary(),
       prisma.feeLedger.aggregate({ where: { type: "TRADING" }, _sum: { amount: true } }),
       prisma.clientHolding.findMany({
         where: { parts: { gt: 0 } },
@@ -61,6 +63,9 @@ export default async function ManagerView() {
   const totalAssets = pool?.totalAssets.toNumber() ?? 0;
   const totalParts = pool?.totalParts.toNumber() ?? 0;
   const nav = computeNav(totalAssets, totalParts).toNumber();
+  const perfFeeAvailable = feeSummary.available.toNumber();
+  const perfFeeEarned = feeSummary.earned.toNumber();
+  const platformTotal = totalAssets + perfFeeAvailable;
   // Horodatage serveur pris une fois par requête, comparé aux échéances déjà figées en base.
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
@@ -76,17 +81,35 @@ export default async function ManagerView() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div className="card">
-          <div className="label-mono">{t("perfFeeRevenue")}</div>
-          <div className="text-xl font-bold text-gold mt-1">{fmt(feeAgg._sum.amount?.toNumber() ?? 0)}</div>
+          <div className="label-mono">{t("aumTotal")}</div>
+          <div className="text-xl font-bold mt-1">{fmt(totalAssets)}</div>
         </div>
         <div className="card">
-          <div className="label-mono">{t("tradingFeeCumulative")}</div>
-          <div className="text-xl font-bold text-muted mt-1">{fmt(tradingFeeAgg._sum.amount?.toNumber() ?? 0)}</div>
+          <div className="label-mono">{t("platformTotal")}</div>
+          <div className="text-xl font-bold text-blue mt-1">{fmt(platformTotal)}</div>
         </div>
         <div className="card">
           <div className="label-mono">{t("pendingDeposits")}</div>
           <div className="text-xl font-bold mt-1">{pendingDeposits.length}</div>
         </div>
+        <div className="card">
+          <div className="label-mono">{t("perfFeeAvailable")}</div>
+          <div className="text-xl font-bold text-gold mt-1">{fmt(perfFeeAvailable)}</div>
+        </div>
+        <div className="card">
+          <div className="label-mono">{t("perfFeeRevenue")}</div>
+          <div className="text-xl font-bold text-muted mt-1">{fmt(perfFeeEarned)}</div>
+        </div>
+        <div className="card">
+          <div className="label-mono">{t("tradingFeeCumulative")}</div>
+          <div className="text-xl font-bold text-muted mt-1">{fmt(tradingFeeAgg._sum.amount?.toNumber() ?? 0)}</div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="label-mono text-gold mb-3">{t("withdrawFeesTitle")}</div>
+        <WithdrawFeeForm availableAmount={perfFeeAvailable} />
+        <div className="text-xs text-muted mt-2">{t("withdrawFeesHint")}</div>
       </div>
 
       <div className="card">

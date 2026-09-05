@@ -169,9 +169,19 @@
   "manager": {
     "title": "Espace gestionnaire",
     "auditLog": "Journal d'audit →",
-    "perfFeeRevenue": "Revenu perf. fee (cumul)",
+    "aumTotal": "AUM total (clients)",
+    "platformTotal": "Total plateforme de trading",
+    "perfFeeAvailable": "Perf. fee disponible à retirer",
+    "perfFeeRevenue": "Revenu perf. fee (cumul gagné)",
     "tradingFeeCumulative": "Frais trading (cumul, indicatif)",
     "pendingDeposits": "Dépôts en attente",
+    "withdrawFeesTitle": "Retirer des performance fees",
+    "withdrawFeesHint": "Les performance fees prélevées ne quittent jamais physiquement la plateforme de trading : elles sont seulement retranchées de l'AUM dans le calcul interne. Ce retrait n'affecte ni l'AUM ni les parts clients — il trace seulement que tu as effectivement sorti cet argent de la plateforme (à faire correspondre à un retrait réel de ta part). Une fois tout retiré, \"Total plateforme de trading\" redevient égal à \"AUM total\".",
+    "withdrawAmountLabel": "Montant à retirer ($)",
+    "withdrawAllButton": "Tout retirer ({amount}$)",
+    "withdrawing": "Retrait…",
+    "withdrawSubmit": "Retirer →",
+    "withdrawSuccess": "{amount}$ de performance fee marqués comme retirés.",
     "logTradeTitle": "Enregistrer un trade / résultat du jour (saisie manuelle)",
     "logTradeHint": "Le résultat saisi est déjà net des frais de la plateforme de trading (spread, financement, exécution) : ils sont couverts par la plateforme avant que tu connaisses ton résultat, donc ne les déduis pas toi-même. Performance fee de 30% prélevée sur les gains au-dessus du high-water mark, aucun frais sinon.",
     "testTools": "Outils de test",
@@ -277,7 +287,8 @@
     "actionKycRejected": "KYC rejeté",
     "actionTwoFactorEnabled": "2FA activée",
     "actionTwoFactorDisabled": "2FA désactivée",
-    "actionPasswordReset": "Mot de passe réinitialisé"
+    "actionPasswordReset": "Mot de passe réinitialisé",
+    "actionPerfFeeWithdrawn": "Performance fee retirée"
   },
   "errors": {
     "UNKNOWN": "Erreur inconnue",
@@ -335,7 +346,9 @@
     "TEST_CLIENT_NAME_REQUIRED": "Nom requis",
     "TEST_CLIENT_EMAIL_REQUIRED": "Email requis",
     "TEST_CLIENT_PASSWORD_TOO_SHORT": "Mot de passe : 8 caractères minimum",
-    "RESET_CONFIRMATION_MISMATCH": "Tape exactement \"RESET\" pour confirmer"
+    "RESET_CONFIRMATION_MISMATCH": "Tape exactement \"RESET\" pour confirmer",
+    "FEE_WITHDRAWAL_INVALID_AMOUNT": "Le montant à retirer doit être strictement positif",
+    "FEE_WITHDRAWAL_EXCEEDS_AVAILABLE": "Ce montant dépasse la performance fee disponible à retirer"
   },
   "emails": {
     "footer": "Ledger Capital — cet email est automatique, ne pas répondre.",

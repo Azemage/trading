@@ -169,9 +169,19 @@
   "manager": {
     "title": "Manager area",
     "auditLog": "Audit log →",
-    "perfFeeRevenue": "Perf. fee revenue (cumulative)",
+    "aumTotal": "Total AUM (clients)",
+    "platformTotal": "Total trading platform balance",
+    "perfFeeAvailable": "Perf. fee available to withdraw",
+    "perfFeeRevenue": "Perf. fee revenue (total earned)",
     "tradingFeeCumulative": "Trading fees (cumulative, informational)",
     "pendingDeposits": "Pending deposits",
+    "withdrawFeesTitle": "Withdraw performance fees",
+    "withdrawFeesHint": "Performance fees taken never physically leave the trading platform: they're only subtracted from the AUM in the internal calculation. This withdrawal doesn't affect the AUM or client shares — it only records that you actually took this money out of the platform (should match a real withdrawal on your end). Once everything is withdrawn, \"Total trading platform balance\" becomes equal to \"Total AUM\" again.",
+    "withdrawAmountLabel": "Amount to withdraw ($)",
+    "withdrawAllButton": "Withdraw all (${amount})",
+    "withdrawing": "Withdrawing…",
+    "withdrawSubmit": "Withdraw →",
+    "withdrawSuccess": "${amount} of performance fee marked as withdrawn.",
     "logTradeTitle": "Log a trade / today's result (manual entry)",
     "logTradeHint": "The entered result is already net of the trading platform's fees (spread, funding, execution): the platform covers and deducts them before you even see your result, so don't deduct them yourself. A 30% performance fee is then taken on gains above the high-water mark, no fee otherwise.",
     "testTools": "Test tools",
@@ -277,7 +287,8 @@
     "actionKycRejected": "KYC rejected",
     "actionTwoFactorEnabled": "2FA enabled",
     "actionTwoFactorDisabled": "2FA disabled",
-    "actionPasswordReset": "Password reset"
+    "actionPasswordReset": "Password reset",
+    "actionPerfFeeWithdrawn": "Performance fee withdrawn"
   },
   "errors": {
     "UNKNOWN": "Unknown error",
@@ -335,7 +346,9 @@
     "TEST_CLIENT_NAME_REQUIRED": "Name required",
     "TEST_CLIENT_EMAIL_REQUIRED": "Email required",
     "TEST_CLIENT_PASSWORD_TOO_SHORT": "Password: 8 characters minimum",
-    "RESET_CONFIRMATION_MISMATCH": "Type exactly \"RESET\" to confirm"
+    "RESET_CONFIRMATION_MISMATCH": "Type exactly \"RESET\" to confirm",
+    "FEE_WITHDRAWAL_INVALID_AMOUNT": "The amount to withdraw must be strictly positive",
+    "FEE_WITHDRAWAL_EXCEEDS_AVAILABLE": "This amount exceeds the performance fee available to withdraw"
   },
   "emails": {
     "footer": "Ledger Capital — this is an automated email, please do not reply.",

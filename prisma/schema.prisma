@@ -98,6 +98,7 @@ model User {
   kycSubmissions    KycSubmission[]   @relation("KycSubmittedBy")
   kycReviewed       KycSubmission[]   @relation("KycReviewedBy")
   passwordResetTokens PasswordResetToken[]
+  feeWithdrawals    FeeWithdrawal[]
 
   @@map("users")
 }
@@ -188,6 +189,23 @@ model FeeLedger {
   trade   Trade?   @relation(fields: [tradeId], references: [id])
 
   @@map("fee_ledger")
+}
+
+// Retraits effectués par le gestionnaire sur les performance fees déjà
+// prélevées (argent qui reste physiquement sur la plateforme de trading —
+// mêlé à l'AUM des clients — tant qu'il n'a pas été retiré). Écriture
+// seule, jamais de update/delete dans le code applicatif. Le solde
+// "disponible" se déduit de FeeLedger(PERFORMANCE) moins la somme de cette
+// table — voir lib/fee-withdrawal.ts.
+model FeeWithdrawal {
+  id        String   @id @default(uuid())
+  amount    Decimal  @db.Decimal(24, 8)
+  note      String?
+  managerId String
+  manager   User     @relation(fields: [managerId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@map("fee_withdrawals")
 }
 
 model PendingMovement {

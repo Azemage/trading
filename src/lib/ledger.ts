@@ -93,121 +93,298 @@ export type ClientLedgerEntry =
       balanceAfter: number;
     };
 
+type TimelineEvent =
+  | { kind: "DEPOSIT"; date: Date; amount: number; balanceBefore: number; balanceAfter: number }
+  | { kind: "WITHDRAWAL"; date: Date; amount: number; balanceBefore: number; balanceAfter: number }
+  | {
+      kind: "TRADE";
+      date: Date;
+      tradeId: string;
+      pnlPct: number;
+      pair: string | null;
+      balanceBefore: number;
+      grossBalanceAfter: number; // avant performance fee
+      balanceAfter: number; // net, après performance fee
+    };
+
+interface ClientTimeline {
+  joinDate: Date | null;
+  totalDeposited: number;
+  events: TimelineEvent[];
+}
+
+/**
+ * Reconstitue, pour TOUS les clients ayant déjà déposé, leur solde exact
+ * dépôt par dépôt / trade par trade (mêmes principes que buildClientLedger :
+ * ratio NAV appliqué uniformément, performance fee jamais déduite deux
+ * fois). Nécessaire pour la répartition des frais au centime près
+ * ci-dessous, qui doit connaître le poids de CHAQUE client dans le pool à
+ * chaque trade, pas seulement celui du client affiché.
+ */
+async function buildClientTimelines(): Promise<Map<string, ClientTimeline>> {
+  const [deposits, withdrawals, trades] = await Promise.all([
+    prisma.pendingMovement.findMany({
+      where: { type: "DEPOSIT", status: "COMPLETED" },
+      orderBy: { processedAt: "asc" },
+    }),
+    prisma.pendingMovement.findMany({
+      where: { type: "WITHDRAWAL", status: "COMPLETED" },
+      orderBy: { processedAt: "asc" },
+    }),
+    prisma.trade.findMany({ orderBy: { timestamp: "asc" } }),
+  ]);
+
+  const depositsByClient = new Map<string, typeof deposits>();
+  for (const d of deposits) {
+    if (!d.processedAt) continue;
+    const list = depositsByClient.get(d.clientId) ?? [];
+    list.push(d);
+    depositsByClient.set(d.clientId, list);
+  }
+  const withdrawalsByClient = new Map<string, typeof withdrawals>();
+  for (const w of withdrawals) {
+    if (!w.processedAt) continue;
+    const list = withdrawalsByClient.get(w.clientId) ?? [];
+    list.push(w);
+    withdrawalsByClient.set(w.clientId, list);
+  }
+
+  const timelines = new Map<string, ClientTimeline>();
+
+  for (const [clientId, clientDeposits] of depositsByClient) {
+    const joinDate = clientDeposits[0].processedAt!;
+    const totalDeposited = clientDeposits.reduce((s, d) => s + d.amount.toNumber(), 0);
+    const clientWithdrawals = withdrawalsByClient.get(clientId) ?? [];
+    const clientTrades = trades.filter((t) => t.timestamp.getTime() >= joinDate.getTime());
+
+    type Raw =
+      | { date: Date; kind: "DEPOSIT"; amount: number }
+      | { date: Date; kind: "WITHDRAWAL"; amount: number }
+      | {
+          date: Date;
+          kind: "TRADE";
+          tradeId: string;
+          navBefore: number;
+          navAfter: number;
+          pnlPct: number;
+          pair: string | null;
+        };
+
+    const raw: Raw[] = [
+      ...clientDeposits.map((d) => ({ date: d.processedAt!, kind: "DEPOSIT" as const, amount: d.amount.toNumber() })),
+      ...clientWithdrawals.map((w) => ({
+        date: w.processedAt!,
+        kind: "WITHDRAWAL" as const,
+        amount: w.grantedAmount?.toNumber() ?? 0,
+      })),
+      ...clientTrades.map((t) => ({
+        date: t.timestamp,
+        kind: "TRADE" as const,
+        tradeId: t.id,
+        navBefore: t.navBefore.toNumber(),
+        navAfter: t.navAfter.toNumber(),
+        pnlPct: t.pnlPct.toNumber(),
+        pair: t.pair,
+      })),
+    ];
+    raw.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    let balance = 0;
+    const events: TimelineEvent[] = raw.map((r) => {
+      const balanceBefore = balance;
+      if (r.kind === "DEPOSIT") {
+        balance = balanceBefore + r.amount;
+        return { kind: "DEPOSIT", date: r.date, amount: r.amount, balanceBefore, balanceAfter: balance };
+      }
+      if (r.kind === "WITHDRAWAL") {
+        balance = balanceBefore - r.amount;
+        return { kind: "WITHDRAWAL", date: r.date, amount: r.amount, balanceBefore, balanceAfter: balance };
+      }
+      const grossBalanceAfter = balanceBefore * (1 + r.pnlPct / 100);
+      balance = r.navBefore > 0 ? balanceBefore * (r.navAfter / r.navBefore) : balanceBefore;
+      return {
+        kind: "TRADE",
+        date: r.date,
+        tradeId: r.tradeId,
+        pnlPct: r.pnlPct,
+        pair: r.pair,
+        balanceBefore,
+        grossBalanceAfter,
+        balanceAfter: balance,
+      };
+    });
+
+    timelines.set(clientId, { joinDate, totalDeposited, events });
+  }
+
+  return timelines;
+}
+
+/**
+ * Répartit un montant exact (`targetTotal`, en dollars) en centimes entiers
+ * entre plusieurs parts, en garantissant que la somme des parts arrondies
+ * reconstitue EXACTEMENT `targetTotal` au centime — jamais un écart comme
+ * 7,44$ réel affiché en 7,47$ une fois les parts client additionnées.
+ *
+ * Méthode du plus grand reste : chaque part est d'abord arrondie au
+ * centime inférieur, puis les centimes manquants sont distribués un par un
+ * aux parts dont la portion décimale tronquée était la plus grande — donc
+ * si un centime doit être arrondi "vers le haut" quelque part, il est
+ * automatiquement compensé par un arrondi "vers le bas" ailleurs.
+ */
+function allocateCentsByLargestRemainder(shares: { key: string; amount: number }[], targetTotal: number): Map<string, number> {
+  const targetCents = Math.round(targetTotal * 100);
+  const result = new Map<string, number>();
+  if (targetCents <= 0 || shares.length === 0) {
+    for (const s of shares) result.set(s.key, 0);
+    return result;
+  }
+
+  const withRemainders = shares.map((s) => {
+    const exactCents = Math.max(s.amount, 0) * 100;
+    const floorCents = Math.floor(exactCents);
+    return { key: s.key, floorCents, remainder: exactCents - floorCents };
+  });
+
+  const baseSum = withRemainders.reduce((sum, s) => sum + s.floorCents, 0);
+  const leftover = Math.max(0, Math.min(targetCents - baseSum, withRemainders.length));
+
+  for (const s of withRemainders) result.set(s.key, s.floorCents);
+
+  const byLargestRemainder = [...withRemainders].sort((a, b) => b.remainder - a.remainder);
+  for (let i = 0; i < leftover; i++) {
+    const key = byLargestRemainder[i].key;
+    result.set(key, (result.get(key) ?? 0) + 1);
+  }
+
+  return result;
+}
+
+/**
+ * Pour chaque trade, répartit le frais de trading (indicatif) et la
+ * performance fee réellement prélevée (source de vérité : FeeLedger) entre
+ * tous les clients qui détenaient une part du pool à ce moment-là, au
+ * centime près et sans écart d'arrondi cumulé — voir
+ * allocateCentsByLargestRemainder ci-dessus.
+ */
+async function computeReconciledTradeFees(
+  timelines: Map<string, ClientTimeline>
+): Promise<Map<string, Map<string, { tradingFeeUsd: number; perfFeeUsd: number }>>> {
+  const tradeIds = new Set<string>();
+  for (const timeline of timelines.values()) {
+    for (const event of timeline.events) {
+      if (event.kind === "TRADE") tradeIds.add(event.tradeId);
+    }
+  }
+  if (tradeIds.size === 0) return new Map();
+
+  const [trades, feeEntries] = await Promise.all([
+    prisma.trade.findMany({ where: { id: { in: [...tradeIds] } } }),
+    prisma.feeLedger.findMany({ where: { tradeId: { in: [...tradeIds] } } }),
+  ]);
+  const tradeById = new Map(trades.map((t) => [t.id, t]));
+  const feesByTrade = new Map<string, { trading: number; performance: number }>();
+  for (const f of feeEntries) {
+    if (!f.tradeId) continue;
+    const entry = feesByTrade.get(f.tradeId) ?? { trading: 0, performance: 0 };
+    if (f.type === "TRADING") entry.trading += f.amount.toNumber();
+    if (f.type === "PERFORMANCE") entry.performance += f.amount.toNumber();
+    feesByTrade.set(f.tradeId, entry);
+  }
+
+  const participantsByTrade = new Map<
+    string,
+    { clientId: string; balanceBefore: number; grossBalanceAfter: number; balanceAfter: number }[]
+  >();
+  for (const [clientId, timeline] of timelines) {
+    for (const event of timeline.events) {
+      if (event.kind !== "TRADE") continue;
+      const list = participantsByTrade.get(event.tradeId) ?? [];
+      list.push({
+        clientId,
+        balanceBefore: event.balanceBefore,
+        grossBalanceAfter: event.grossBalanceAfter,
+        balanceAfter: event.balanceAfter,
+      });
+      participantsByTrade.set(event.tradeId, list);
+    }
+  }
+
+  const result = new Map<string, Map<string, { tradingFeeUsd: number; perfFeeUsd: number }>>();
+  for (const [tradeId, participants] of participantsByTrade) {
+    const trade = tradeById.get(tradeId);
+    const fees = feesByTrade.get(tradeId) ?? { trading: 0, performance: 0 };
+    const tradingFeeTotal = trade?.tradingFeeUsd?.toNumber() ?? 0;
+
+    const totalBalanceBefore = participants.reduce((s, p) => s + p.balanceBefore, 0);
+    const tradingCents = allocateCentsByLargestRemainder(
+      participants.map((p) => ({
+        key: p.clientId,
+        amount: totalBalanceBefore > 0 ? (p.balanceBefore / totalBalanceBefore) * tradingFeeTotal : 0,
+      })),
+      tradingFeeTotal
+    );
+    const perfCents = allocateCentsByLargestRemainder(
+      participants.map((p) => ({ key: p.clientId, amount: Math.max(p.grossBalanceAfter - p.balanceAfter, 0) })),
+      fees.performance
+    );
+
+    const perClient = new Map<string, { tradingFeeUsd: number; perfFeeUsd: number }>();
+    for (const p of participants) {
+      perClient.set(p.clientId, {
+        tradingFeeUsd: (tradingCents.get(p.clientId) ?? 0) / 100,
+        perfFeeUsd: (perfCents.get(p.clientId) ?? 0) / 100,
+      });
+    }
+    result.set(tradeId, perClient);
+  }
+
+  return result;
+}
+
 /**
  * Historique complet et chronologique d'un client : ses dépôts/retraits
  * réalisés, entrelacés avec tous les trades du pool depuis son entrée,
  * chacun avec l'impact exact sur SON solde.
  *
- * Le calcul est exact (pas une approximation) : chaque trade fait évoluer
- * le solde du client par le même ratio NAV_après/NAV_avant que pour le
- * pool entier (ses parts ne changent pas pendant un trade), et chaque
- * dépôt/retrait ajoute/retranche exactement le montant réel — donc même
- * un retrait partiel entre deux trades reste correctement reflété.
+ * Le calcul du solde est exact (pas une approximation) : chaque trade fait
+ * évoluer le solde du client par le même ratio NAV_après/NAV_avant que
+ * pour le pool entier (ses parts ne changent pas pendant un trade), et
+ * chaque dépôt/retrait ajoute/retranche exactement le montant réel — donc
+ * même un retrait partiel entre deux trades reste correctement reflété.
+ *
+ * Les colonnes "Frais trading" et "Frais perf." affichées, elles, sont
+ * arrondies au centime avec réconciliation entre tous les clients (voir
+ * computeReconciledTradeFees) : leur somme sur tous les clients reconstitue
+ * toujours exactement le montant réel prélevé, jamais un écart de quelques
+ * centimes dû à des arrondis indépendants ligne par ligne.
  */
 export async function buildClientLedger(clientId: string) {
-  const [deposits, withdrawals] = await Promise.all([
-    prisma.pendingMovement.findMany({
-      where: { clientId, type: "DEPOSIT", status: "COMPLETED" },
-      orderBy: { processedAt: "asc" },
-    }),
-    prisma.pendingMovement.findMany({
-      where: { clientId, type: "WITHDRAWAL", status: "COMPLETED" },
-      orderBy: { processedAt: "asc" },
-    }),
-  ]);
-
-  const firstDeposit = deposits[0];
-  if (!firstDeposit?.processedAt) {
+  const timelines = await buildClientTimelines();
+  const timeline = timelines.get(clientId);
+  if (!timeline?.joinDate) {
     return { joinDate: null as Date | null, totalDeposited: 0, entries: [] as ClientLedgerEntry[] };
   }
-  const joinDate = firstDeposit.processedAt;
-  const totalDeposited = deposits.reduce((s, d) => s + d.amount.toNumber(), 0);
 
-  const trades = await prisma.trade.findMany({
-    where: { timestamp: { gte: joinDate } },
-    orderBy: { timestamp: "asc" },
-  });
+  const reconciledFees = await computeReconciledTradeFees(timelines);
 
-  type RawEvent =
-    | { date: Date; kind: "DEPOSIT"; amount: number }
-    | { date: Date; kind: "WITHDRAWAL"; amount: number }
-    | {
-        date: Date;
-        kind: "TRADE";
-        navBefore: number;
-        navAfter: number;
-        pnlPct: number;
-        pair: string | null;
-        totalAssetsBefore: number;
-        tradingFeeUsd: number;
-      };
-
-  const raw: RawEvent[] = [
-    ...deposits.map((d) => ({ date: d.processedAt!, kind: "DEPOSIT" as const, amount: d.amount.toNumber() })),
-    ...withdrawals
-      .filter((w) => w.processedAt)
-      .map((w) => ({
-        date: w.processedAt!,
-        kind: "WITHDRAWAL" as const,
-        amount: w.grantedAmount?.toNumber() ?? 0,
-      })),
-    ...trades.map((t) => {
-      const navBefore = t.navBefore.toNumber();
-      const navAfter = t.navAfter.toNumber();
-      const pnlPct = t.pnlPct.toNumber();
-      const totalParts = t.totalPartsAtTrade.toNumber();
-      const tradingFeeUsd = t.tradingFeeUsd?.toNumber() ?? 0;
-      return {
-        date: t.timestamp,
-        kind: "TRADE" as const,
-        navBefore,
-        navAfter,
-        pnlPct,
-        pair: t.pair,
-        totalAssetsBefore: navBefore * totalParts,
-        tradingFeeUsd,
-      };
-    }),
-  ];
-  raw.sort((a, b) => a.date.getTime() - b.date.getTime());
-
-  let balance = 0;
-  const entries: ClientLedgerEntry[] = raw.map((r) => {
-    const balanceBefore = balance;
-    if (r.kind === "DEPOSIT") {
-      balance = balanceBefore + r.amount;
-      return { kind: "DEPOSIT", date: r.date, amount: r.amount, balanceBefore, balanceAfter: balance };
-    }
-    if (r.kind === "WITHDRAWAL") {
-      balance = balanceBefore - r.amount;
-      return { kind: "WITHDRAWAL", date: r.date, amount: r.amount, balanceBefore, balanceAfter: balance };
-    }
-    // Solde brut (avant performance fee) : le % de résultat appliqué directement au
-    // solde. Les frais de trading sont déjà couverts par la plateforme et reflétés
-    // dans ce % — ils ne sont pas déduits une deuxième fois ici.
-    const grossBalanceAfter = balanceBefore * (1 + r.pnlPct / 100);
-    // Solde net (après performance fee) : même ratio NAV net que celui réellement
-    // appliqué au pool.
-    balance = r.navBefore > 0 ? balanceBefore * (r.navAfter / r.navBefore) : balanceBefore;
-    const perfFeeUsd = Math.max(grossBalanceAfter - balance, 0);
-    // Frais de trading : purement indicatif (part du client dans le montant
-    // déclaré par le gestionnaire), n'affecte pas son solde.
-    const tradingFeeUsd =
-      r.totalAssetsBefore > 0 ? (balanceBefore / r.totalAssetsBefore) * r.tradingFeeUsd : 0;
+  const entries: ClientLedgerEntry[] = timeline.events.map((event) => {
+    if (event.kind !== "TRADE") return event;
+    const reconciled = reconciledFees.get(event.tradeId)?.get(clientId) ?? { tradingFeeUsd: 0, perfFeeUsd: 0 };
     return {
       kind: "TRADE",
-      date: r.date,
-      pnlPct: r.pnlPct,
-      pair: r.pair,
-      grossGainUsd: grossBalanceAfter - balanceBefore,
-      tradingFeeUsd,
-      perfFeeUsd,
-      feeUsd: perfFeeUsd,
-      gainUsd: balance - balanceBefore,
-      balanceBefore,
-      balanceAfter: balance,
+      date: event.date,
+      pnlPct: event.pnlPct,
+      pair: event.pair,
+      grossGainUsd: event.grossBalanceAfter - event.balanceBefore,
+      tradingFeeUsd: reconciled.tradingFeeUsd,
+      perfFeeUsd: reconciled.perfFeeUsd,
+      feeUsd: reconciled.perfFeeUsd,
+      gainUsd: event.balanceAfter - event.balanceBefore,
+      balanceBefore: event.balanceBefore,
+      balanceAfter: event.balanceAfter,
     };
   });
 
-  return { joinDate, totalDeposited, entries };
+  return { joinDate: timeline.joinDate, totalDeposited: timeline.totalDeposited, entries };
 }

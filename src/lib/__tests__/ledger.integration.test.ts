@@ -124,4 +124,58 @@ describe("fiche de calcul client — répartition des frais de trading vs perfor
     expect(tradeA.tradingFeeUsd).toBeCloseTo(actualTradingFee * 0.75, 6);
     expect(tradeB.tradingFeeUsd).toBeCloseTo(actualTradingFee * 0.25, 6);
   });
+
+  it("répartit les centimes sans écart d'arrondi cumulé entre trois clients (méthode du plus grand reste)", async () => {
+    // Poids délibérément non ronds (333/333/334) pour forcer des arrondis
+    // individuels — reproduit le cas signalé : 7,44$ réels affichés en 7,47$
+    // une fois les 3 parts client additionnées, à cause d'arrondis indépendants.
+    const clientA = await makeClient("ledgerround-a@test.local");
+    const clientB = await makeClient("ledgerround-b@test.local");
+    const clientC = await makeClient("ledgerround-c@test.local");
+    const manager = await makeManager("ledgerroundmgr@test.local");
+
+    for (const [client, amount] of [
+      [clientA, 333],
+      [clientB, 333],
+      [clientC, 334],
+    ] as const) {
+      const dep = await requestDeposit(client.id, new Decimal(amount));
+      await makeEligible(dep.id);
+      await approveDeposit(dep.id, manager.id);
+    }
+
+    const trade = await logManualTrade({
+      pnlPct: new Decimal(1),
+      tradingFeeUsd: new Decimal(1.5),
+      loggedById: manager.id,
+    });
+
+    const feeEntries = await prisma.feeLedger.findMany({ where: { tradeId: trade.id } });
+    const actualTradingFeeCents = Math.round(
+      (feeEntries.find((f) => f.type === "TRADING")?.amount.toNumber() ?? 0) * 100
+    );
+    const actualPerfFeeCents = Math.round(
+      (feeEntries.find((f) => f.type === "PERFORMANCE")?.amount.toNumber() ?? 0) * 100
+    );
+
+    const [ledgerA, ledgerB, ledgerC] = await Promise.all([
+      buildClientLedger(clientA.id),
+      buildClientLedger(clientB.id),
+      buildClientLedger(clientC.id),
+    ]);
+    const [tradeA, tradeB, tradeC] = [ledgerA, ledgerB, ledgerC].map((l) => l.entries.find((e) => e.kind === "TRADE"));
+    if (tradeA?.kind !== "TRADE" || tradeB?.kind !== "TRADE" || tradeC?.kind !== "TRADE") {
+      throw new Error("trade entry not found");
+    }
+
+    const toCents = (n: number) => Math.round(n * 100);
+    // La somme des 3 parts (arrondies au centime chacune) doit reconstituer
+    // EXACTEMENT le montant réel — jamais un centime de trop ou de manquant.
+    expect(toCents(tradeA.tradingFeeUsd) + toCents(tradeB.tradingFeeUsd) + toCents(tradeC.tradingFeeUsd)).toBe(
+      actualTradingFeeCents
+    );
+    expect(toCents(tradeA.perfFeeUsd) + toCents(tradeB.perfFeeUsd) + toCents(tradeC.perfFeeUsd)).toBe(
+      actualPerfFeeCents
+    );
+  });
 });

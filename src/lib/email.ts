@@ -208,19 +208,23 @@ export const emailTemplates = {
   ) => {
     const changePct = previousBalance > 0 ? ((currentBalance - previousBalance) / previousBalance) * 100 : 0;
     const direction = changePct > 0.05 ? "gain" : changePct < -0.05 ? "loss" : "flat";
+    const title = t("weeklyReportTitle");
+    // bodyHtml (sans le wrapper layout()) est réutilisé tel quel pour la boîte
+    // de réception interne (voir lib/client-messages.ts) : pas de style inline
+    // fixé pour un fond clair, donc il hérite naturellement du thème sombre
+    // de l'app plutôt que de jurer visuellement.
+    const bodyHtml = t("weeklyReportBody", {
+      name: clientName,
+      previousBalance: fmtUsd(previousBalance, locale),
+      currentBalance: fmtUsd(currentBalance, locale),
+      direction,
+      changePct: Math.abs(changePct).toFixed(1),
+    });
     return {
       subject: t("weeklyReportSubject"),
-      html: layout(
-        t,
-        t("weeklyReportTitle"),
-        t("weeklyReportBody", {
-          name: clientName,
-          previousBalance: fmtUsd(previousBalance, locale),
-          currentBalance: fmtUsd(currentBalance, locale),
-          direction,
-          changePct: Math.abs(changePct).toFixed(1),
-        })
-      ),
+      title,
+      bodyHtml,
+      html: layout(t, title, bodyHtml),
     };
   },
 };

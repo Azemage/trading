@@ -99,6 +99,7 @@ model User {
   kycReviewed       KycSubmission[]   @relation("KycReviewedBy")
   passwordResetTokens PasswordResetToken[]
   feeWithdrawals    FeeWithdrawal[]
+  messages          ClientMessage[]
 
   @@map("users")
 }
@@ -206,6 +207,21 @@ model FeeWithdrawal {
   createdAt DateTime @default(now())
 
   @@map("fee_withdrawals")
+}
+
+// Boîte de réception interne du client (ex: rapports de performance
+// hebdomadaires) — canal fiable indépendant de l'envoi d'email, qui peut
+// échouer côté fournisseur (ex: domaine d'envoi pas encore vérifié).
+// Écriture seule, jamais de update/delete dans le code applicatif.
+model ClientMessage {
+  id        String   @id @default(uuid())
+  clientId  String
+  client    User     @relation(fields: [clientId], references: [id])
+  subject   String
+  bodyHtml  String
+  createdAt DateTime @default(now())
+
+  @@map("client_messages")
 }
 
 model PendingMovement {

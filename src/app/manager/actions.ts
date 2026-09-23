@@ -16,6 +16,7 @@ import { createTestClient } from "@/lib/test-clients";
 import { resetAllTestData } from "@/lib/admin-reset";
 import { withdrawPerformanceFees } from "@/lib/fee-withdrawal";
 import { computeWeeklyPerformanceReports, recordWeeklyReportsSent } from "@/lib/performance-report";
+import { createClientMessage } from "@/lib/client-messages";
 import { reviewKyc } from "@/lib/kyc";
 import { sendEmail, emailTemplates, getEmailT } from "@/lib/email";
 import { translateActionError } from "@/lib/error-i18n";
@@ -294,13 +295,17 @@ export async function sendWeeklyReportsAction(
     let firstError: string | null = null;
     for (const r of reports) {
       const t = await getEmailT(r.preferredLocale);
-      const { subject, html } = emailTemplates.weeklyPerformanceReport(
+      const { subject, title, bodyHtml, html } = emailTemplates.weeklyPerformanceReport(
         t,
         r.preferredLocale as Locale,
         r.name,
         r.previousBalance,
         r.currentBalance
       );
+      // Toujours déposé dans la boîte de réception interne du client, que
+      // l'email réussisse ou non — canal fiable indépendant de l'envoi.
+      await createClientMessage(r.clientId, title, bodyHtml);
+
       const result = await sendEmail({ to: r.email, subject, html });
       if (result.ok) {
         sent++;

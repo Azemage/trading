@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { computeNav, valueForParts } from "@/lib/nav";
 import { buildClientLedger } from "@/lib/ledger";
+import { getClientMessages } from "@/lib/client-messages";
 import { fmtUsd, fmtDateTime } from "@/lib/format";
 import type { Locale } from "@/i18n/config";
 import { MovementForms } from "./movement-forms";
@@ -17,7 +18,7 @@ export default async function ClientView() {
   if (!session?.user) redirect("/login");
   if (session.user.role !== "CLIENT") redirect("/manager");
 
-  const [t, locale, pool, holding, movements, me, latestKyc] = await Promise.all([
+  const [t, locale, pool, holding, movements, me, latestKyc, messages] = await Promise.all([
     getTranslations("client"),
     getLocale(),
     prisma.poolState.findUnique({ where: { id: 1 } }),
@@ -35,6 +36,7 @@ export default async function ClientView() {
       where: { clientId: session.user.id },
       orderBy: { submittedAt: "desc" },
     }),
+    getClientMessages(session.user.id),
   ]);
 
   const loc = locale as Locale;
@@ -97,6 +99,23 @@ export default async function ClientView() {
           </div>
         )}
       </div>
+
+      {messages.length > 0 && (
+        <div className="card">
+          <div className="label-mono mb-3">{t("inboxTitle")}</div>
+          <div className="space-y-3 max-h-80 overflow-y-auto">
+            {messages.map((m) => (
+              <div key={m.id} className="border-t border-line first:border-t-0 pt-3 first:pt-0 text-sm">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="font-bold">{m.subject}</span>
+                  <span className="text-xs text-muted whitespace-nowrap">{fmtDateTime(m.createdAt, loc)}</span>
+                </div>
+                <div className="text-sm" dangerouslySetInnerHTML={{ __html: m.bodyHtml }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {joinDate && (
         <div className="card">

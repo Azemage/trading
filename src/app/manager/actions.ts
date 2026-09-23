@@ -277,9 +277,12 @@ export async function withdrawPerformanceFeesAction(
 }
 
 export async function sendWeeklyReportsAction(
-  _prevState: { error: string | null; result: { sent: number; skipped: number } | null },
+  _prevState: { error: string | null; result: { sent: number; failed: number; skipped: number; firstError: string | null } | null },
   _formData: FormData
-): Promise<{ error: string | null; result: { sent: number; skipped: number } | null }> {
+): Promise<{
+  error: string | null;
+  result: { sent: number; failed: number; skipped: number; firstError: string | null } | null;
+}> {
   try {
     const manager = await requireManager();
     const [reports, totalActiveClients] = await Promise.all([
@@ -287,6 +290,8 @@ export async function sendWeeklyReportsAction(
       prisma.user.count({ where: { role: "CLIENT", holding: { parts: { gt: 0 } } } }),
     ]);
 
+    let sent = 0;
+    let firstError: string | null = null;
     for (const r of reports) {
       const t = await getEmailT(r.preferredLocale);
       const { subject, html } = emailTemplates.weeklyPerformanceReport(
@@ -296,15 +301,20 @@ export async function sendWeeklyReportsAction(
         r.previousBalance,
         r.currentBalance
       );
-      await sendEmail({ to: r.email, subject, html });
+      const result = await sendEmail({ to: r.email, subject, html });
+      if (result.ok) {
+        sent++;
+      } else if (!firstError) {
+        firstError = result.error ?? null;
+      }
     }
 
-    const sent = reports.length;
-    const skipped = totalActiveClients - sent;
+    const failed = reports.length - sent;
+    const skipped = totalActiveClients - reports.length;
     await recordWeeklyReportsSent(manager.id, sent, skipped);
 
     revalidatePath("/manager");
-    return { error: null, result: { sent, skipped } };
+    return { error: null, result: { sent, failed, skipped, firstError } };
   } catch (e) {
     return { error: await translateActionError(e), result: null };
   }

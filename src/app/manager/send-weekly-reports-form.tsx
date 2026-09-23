@@ -15,8 +15,17 @@ export function SendWeeklyReportsForm() {
       </button>
       {state.error && <div className="text-red text-xs w-full">{state.error}</div>}
       {state.result && (
-        <div className="text-green text-xs w-full">
-          {t("reportsSent", { sent: state.result.sent, skipped: state.result.skipped })}
+        <div className={`text-xs w-full ${state.result.failed > 0 ? "text-red" : "text-green"}`}>
+          {t("reportsSent", {
+            sent: state.result.sent,
+            failed: state.result.failed,
+            skipped: state.result.skipped,
+          })}
+          {state.result.firstError && (
+            <div className="text-muted mt-1">
+              {t("reportsFirstError", { error: state.result.firstError })}
+            </div>
+          )}
         </div>
       )}
     </form>

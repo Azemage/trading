@@ -269,7 +269,8 @@
     "weeklyReportsHint": "Sends each client (with at least 7 days' tenure and a positive balance) a personalized email comparing their current balance to one week ago, whether a gain or a loss. Clients newer than a week are automatically skipped.",
     "sendReportsButton": "Send this week's reports",
     "sendingReports": "Sending…",
-    "reportsSent": "{sent, plural, =0 {No emails sent} one {# email sent} other {# emails sent}} — {skipped, plural, =0 {no client skipped} one {# client skipped (less than a week of tenure)} other {# clients skipped (less than a week of tenure)}}."
+    "reportsSent": "{sent, plural, =0 {No emails sent} one {# email sent} other {# emails sent}} — {failed, plural, =0 {no failure} one {# failure} other {# failures}} — {skipped, plural, =0 {no client skipped} one {# client skipped (less than a week of tenure)} other {# clients skipped (less than a week of tenure)}}.",
+    "reportsFirstError": "First failure detail: {error}"
   },
   "audit": {
     "title": "Audit log",

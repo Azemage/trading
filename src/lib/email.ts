@@ -24,33 +24,44 @@ export type EmailT = Awaited<ReturnType<typeof getTranslations>>;
  * Envoie un email via Resend si RESEND_API_KEY est configurée, sinon logge
  * le contenu en console (dev sans clé) — ne fait jamais échouer l'action
  * appelante : une notification manquée ne doit jamais bloquer un dépôt,
- * un retrait ou une revue KYC.
+ * un retrait ou une revue KYC. Retourne néanmoins si l'envoi a réellement
+ * réussi (l'API Resend renvoie ses erreurs dans `{ error }`, sans lever
+ * d'exception — les ignorer ferait croire à un envoi réussi qui a en
+ * réalité échoué, par ex. la restriction "sandbox" de Resend qui bloque
+ * l'envoi à toute adresse autre que celle du compte tant qu'aucun domaine
+ * n'est vérifié).
  */
 export async function sendEmail(params: {
   to: string;
   subject: string;
   html: string;
   attachments?: EmailAttachment[];
-}) {
+}): Promise<{ ok: boolean; error?: string }> {
   const client = getClient();
   if (!client) {
     const attachmentNote = params.attachments?.length
       ? ` (+ ${params.attachments.length} pièce(s) jointe(s) : ${params.attachments.map((a) => a.filename).join(", ")})`
       : "";
     console.log(`[email:dev] À: ${params.to} — Objet: ${params.subject}${attachmentNote}\n${params.html}\n`);
-    return;
+    return { ok: true };
   }
 
   try {
-    await client.emails.send({
+    const { error } = await client.emails.send({
       from: FROM,
       to: params.to,
       subject: params.subject,
       html: params.html,
       attachments: params.attachments?.map((a) => ({ filename: a.filename, content: a.content })),
     });
+    if (error) {
+      console.error(`[email] Échec d'envoi à ${params.to} (non bloquant) :`, error);
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
   } catch (e) {
-    console.error("[email] Échec d'envoi (non bloquant) :", e);
+    console.error(`[email] Échec d'envoi à ${params.to} (non bloquant) :`, e);
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 

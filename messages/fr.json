@@ -269,7 +269,8 @@
     "weeklyReportsHint": "Envoie à chaque client (ayant au moins 7 jours d'ancienneté et un solde positif) un email personnalisé comparant son solde actuel à celui d'il y a une semaine, en gain comme en perte. Les clients trop récents (moins d'une semaine) sont automatiquement ignorés.",
     "sendReportsButton": "Envoyer les rapports de la semaine",
     "sendingReports": "Envoi en cours…",
-    "reportsSent": "{sent, plural, =0 {Aucun email envoyé} one {# email envoyé} other {# emails envoyés}} — {skipped, plural, =0 {aucun client ignoré} one {# client ignoré (moins d'une semaine d'ancienneté)} other {# clients ignorés (moins d'une semaine d'ancienneté)}}."
+    "reportsSent": "{sent, plural, =0 {Aucun email envoyé} one {# email envoyé} other {# emails envoyés}} — {failed, plural, =0 {aucun échec} one {# échec} other {# échecs}} — {skipped, plural, =0 {aucun client ignoré} one {# client ignoré (moins d'une semaine d'ancienneté)} other {# clients ignorés (moins d'une semaine d'ancienneté)}}.",
+    "reportsFirstError": "Détail du premier échec : {error}"
   },
   "audit": {
     "title": "Journal d'audit",

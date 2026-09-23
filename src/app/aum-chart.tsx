@@ -12,6 +12,8 @@ import {
 import { useTranslations, useLocale } from "next-intl";
 import { fmtUsd } from "@/lib/format";
 import type { Locale } from "@/i18n/config";
+import { useChartWindow } from "./use-chart-window";
+import { ChartNav } from "./chart-nav";
 
 const COLORS = {
   green: "#34d399",
@@ -105,11 +107,21 @@ export function AumChart({ data }: { data: { totalAssets: number; reason: string
     reason: d.reason,
     delta: i > 0 ? Math.round((d.totalAssets - data[i - 1].totalAssets) * 100) / 100 : 0,
   }));
+  const chart = useChartWindow(points, 10);
 
   return (
     <div>
+      <ChartNav
+        canGoBack={chart.canGoBack}
+        canGoForward={chart.canGoForward}
+        onBack={chart.goBack}
+        onForward={chart.goForward}
+        rangeStart={chart.rangeStart}
+        rangeEnd={chart.rangeEnd}
+        total={chart.total}
+      />
       <ResponsiveContainer width="100%" height={220}>
-        <LineChart data={points}>
+        <LineChart data={chart.visible}>
           <CartesianGrid stroke="#1a1f2a" />
           <XAxis dataKey="label" tick={{ fill: COLORS.muted, fontSize: 10 }} />
           <YAxis tick={{ fill: COLORS.muted, fontSize: 10 }} domain={["auto", "auto"]} />

@@ -264,7 +264,12 @@
     "onStake": "On the stake (x{leverage}):",
     "liquidation": "(liquidation)",
     "aumImpact": "Impact on total AUM:",
-    "resultPctOfAum": "Result as % of AUM"
+    "resultPctOfAum": "Result as % of AUM",
+    "weeklyReportsTitle": "Weekly performance reports",
+    "weeklyReportsHint": "Sends each client (with at least 7 days' tenure and a positive balance) a personalized email comparing their current balance to one week ago, whether a gain or a loss. Clients newer than a week are automatically skipped.",
+    "sendReportsButton": "Send this week's reports",
+    "sendingReports": "Sending…",
+    "reportsSent": "{sent, plural, =0 {No emails sent} one {# email sent} other {# emails sent}} — {skipped, plural, =0 {no client skipped} one {# client skipped (less than a week of tenure)} other {# clients skipped (less than a week of tenure)}}."
   },
   "audit": {
     "title": "Audit log",
@@ -288,7 +293,8 @@
     "actionTwoFactorEnabled": "2FA enabled",
     "actionTwoFactorDisabled": "2FA disabled",
     "actionPasswordReset": "Password reset",
-    "actionPerfFeeWithdrawn": "Performance fee withdrawn"
+    "actionPerfFeeWithdrawn": "Performance fee withdrawn",
+    "actionWeeklyReportsSent": "Weekly reports sent"
   },
   "errors": {
     "UNKNOWN": "Unknown error",
@@ -394,6 +400,9 @@
     "managerNewKycSubject": "New KYC submission",
     "managerNewKycTitle": "New KYC submission",
     "managerNewKycBody": "<p>{name} submitted their KYC documents. To review in the manager area.</p>",
-    "managerNewKycPhotosNote": "<p>The front/back photos are attached to this email.</p>"
+    "managerNewKycPhotosNote": "<p>The front/back photos are attached to this email.</p>",
+    "weeklyReportSubject": "Your weekly update",
+    "weeklyReportTitle": "Your weekly update",
+    "weeklyReportBody": "<p>Hello {name},</p><p>A week ago, your balance was <strong>{previousBalance}</strong>. It's now <strong>{currentBalance}</strong>, a {direction, select, gain {gain of <strong>+{changePct}%</strong> 🎉} loss {decline of <strong>{changePct}%</strong>} other {stable result}}.</p>"
   }
 }

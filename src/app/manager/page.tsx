@@ -14,6 +14,7 @@ import { TradeForm } from "./trade-form";
 import { PoolAdjustForm } from "./pool-adjust-form";
 import { CreateTestClientForm } from "./create-test-client-form";
 import { ResetTestDataForm } from "./reset-test-data-form";
+import { SendWeeklyReportsForm } from "./send-weekly-reports-form";
 import { buildManagerLedger } from "@/lib/ledger";
 import { getPerformanceFeeSummary } from "@/lib/fee-withdrawal";
 import { fmtUsd, fmtDateTime } from "@/lib/format";
@@ -116,6 +117,12 @@ export default async function ManagerView() {
         <div className="label-mono text-gold mb-3">{t("logTradeTitle")}</div>
         <TradeForm currentTotalAssets={totalAssets} />
         <div className="text-xs text-muted mt-2">{t("logTradeHint")}</div>
+      </div>
+
+      <div className="card">
+        <div className="label-mono text-gold mb-3">{t("weeklyReportsTitle")}</div>
+        <SendWeeklyReportsForm />
+        <div className="text-xs text-muted mt-2">{t("weeklyReportsHint")}</div>
       </div>
 
       <div className="card border-red space-y-4">

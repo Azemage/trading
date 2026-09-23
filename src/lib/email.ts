@@ -188,4 +188,28 @@ export const emailTemplates = {
       t("managerNewKycBody", { name: clientName }) + (hasPhotos ? t("managerNewKycPhotosNote") : "")
     ),
   }),
+  weeklyPerformanceReport: (
+    t: EmailT,
+    locale: Locale,
+    clientName: string,
+    previousBalance: number,
+    currentBalance: number
+  ) => {
+    const changePct = previousBalance > 0 ? ((currentBalance - previousBalance) / previousBalance) * 100 : 0;
+    const direction = changePct > 0.05 ? "gain" : changePct < -0.05 ? "loss" : "flat";
+    return {
+      subject: t("weeklyReportSubject"),
+      html: layout(
+        t,
+        t("weeklyReportTitle"),
+        t("weeklyReportBody", {
+          name: clientName,
+          previousBalance: fmtUsd(previousBalance, locale),
+          currentBalance: fmtUsd(currentBalance, locale),
+          direction,
+          changePct: Math.abs(changePct).toFixed(1),
+        })
+      ),
+    };
+  },
 };

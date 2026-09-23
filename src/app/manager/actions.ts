@@ -15,6 +15,7 @@ import { ALLOWED_LEVERAGES, computePositionPnlPct } from "@/lib/position";
 import { createTestClient } from "@/lib/test-clients";
 import { resetAllTestData } from "@/lib/admin-reset";
 import { withdrawPerformanceFees } from "@/lib/fee-withdrawal";
+import { computeWeeklyPerformanceReports, recordWeeklyReportsSent } from "@/lib/performance-report";
 import { reviewKyc } from "@/lib/kyc";
 import { sendEmail, emailTemplates, getEmailT } from "@/lib/email";
 import { translateActionError } from "@/lib/error-i18n";
@@ -272,6 +273,40 @@ export async function withdrawPerformanceFeesAction(
     return { error: null, success: t("withdrawSuccess", { amount: withdrawal.amount.toString() }) };
   } catch (e) {
     return { error: await translateActionError(e), success: null };
+  }
+}
+
+export async function sendWeeklyReportsAction(
+  _prevState: { error: string | null; result: { sent: number; skipped: number } | null },
+  _formData: FormData
+): Promise<{ error: string | null; result: { sent: number; skipped: number } | null }> {
+  try {
+    const manager = await requireManager();
+    const [reports, totalActiveClients] = await Promise.all([
+      computeWeeklyPerformanceReports(),
+      prisma.user.count({ where: { role: "CLIENT", holding: { parts: { gt: 0 } } } }),
+    ]);
+
+    for (const r of reports) {
+      const t = await getEmailT(r.preferredLocale);
+      const { subject, html } = emailTemplates.weeklyPerformanceReport(
+        t,
+        r.preferredLocale as Locale,
+        r.name,
+        r.previousBalance,
+        r.currentBalance
+      );
+      await sendEmail({ to: r.email, subject, html });
+    }
+
+    const sent = reports.length;
+    const skipped = totalActiveClients - sent;
+    await recordWeeklyReportsSent(manager.id, sent, skipped);
+
+    revalidatePath("/manager");
+    return { error: null, result: { sent, skipped } };
+  } catch (e) {
+    return { error: await translateActionError(e), result: null };
   }
 }
 

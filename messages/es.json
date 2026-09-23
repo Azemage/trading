@@ -264,7 +264,12 @@
     "onStake": "Sobre la posición (x{leverage}):",
     "liquidation": "(liquidación)",
     "aumImpact": "Impacto sobre el AUM total:",
-    "resultPctOfAum": "Resultado en % del AUM"
+    "resultPctOfAum": "Resultado en % del AUM",
+    "weeklyReportsTitle": "Informes de rendimiento semanales",
+    "weeklyReportsHint": "Envía a cada cliente (con al menos 7 días de antigüedad y saldo positivo) un email personalizado comparando su saldo actual con el de hace una semana, tanto en ganancia como en pérdida. Los clientes con menos de una semana se omiten automáticamente.",
+    "sendReportsButton": "Enviar los informes de la semana",
+    "sendingReports": "Enviando…",
+    "reportsSent": "{sent, plural, =0 {Ningún email enviado} one {# email enviado} other {# emails enviados}} — {skipped, plural, =0 {ningún cliente omitido} one {# cliente omitido (menos de una semana de antigüedad)} other {# clientes omitidos (menos de una semana de antigüedad)}}."
   },
   "audit": {
     "title": "Registro de auditoría",
@@ -288,7 +293,8 @@
     "actionTwoFactorEnabled": "2FA activada",
     "actionTwoFactorDisabled": "2FA desactivada",
     "actionPasswordReset": "Contraseña restablecida",
-    "actionPerfFeeWithdrawn": "Comisión de rendimiento retirada"
+    "actionPerfFeeWithdrawn": "Comisión de rendimiento retirada",
+    "actionWeeklyReportsSent": "Informes semanales enviados"
   },
   "errors": {
     "UNKNOWN": "Error desconocido",
@@ -394,6 +400,9 @@
     "managerNewKycSubject": "Nueva solicitud KYC",
     "managerNewKycTitle": "Nueva solicitud KYC",
     "managerNewKycBody": "<p>{name} envió sus documentos KYC. Por revisar en el área de gestor.</p>",
-    "managerNewKycPhotosNote": "<p>Las fotos de anverso/reverso están adjuntas a este email.</p>"
+    "managerNewKycPhotosNote": "<p>Las fotos de anverso/reverso están adjuntas a este email.</p>",
+    "weeklyReportSubject": "Tu balance semanal",
+    "weeklyReportTitle": "Tu balance semanal",
+    "weeklyReportBody": "<p>Hola {name},</p><p>Hace una semana, tu saldo era de <strong>{previousBalance}</strong>. Hoy es de <strong>{currentBalance}</strong>, es decir, {direction, select, gain {una ganancia del <strong>+{changePct}%</strong> 🎉} loss {una caída del <strong>{changePct}%</strong>} other {un resultado estable}}.</p>"
   }
 }

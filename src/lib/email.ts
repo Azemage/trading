@@ -110,21 +110,34 @@ function layout(t: EmailT, title: string, bodyHtml: string) {
   </div>`;
 }
 
+// Les messages email contiennent des balises HTML littérales (<p>, <strong>,
+// <code>) directement dans le texte traduit. next-intl/ICU les traite comme
+// des balises "rich text" qui exigent une fonction de formatage explicite
+// pour chaque nom de balise (sinon `t()` lève une FORMATTING_ERROR et
+// retombe silencieusement sur la clé brute, ex: "emails.weeklyReportBody",
+// au lieu du texte) — d'où l'usage de `t.markup()` partout ci-dessous,
+// avec ces fonctions qui renvoient une chaîne (pas du JSX).
+const MARKUP_TAGS = {
+  p: (chunks: string) => `<p>${chunks}</p>`,
+  strong: (chunks: string) => `<strong>${chunks}</strong>`,
+  code: (chunks: string) => `<code>${chunks}</code>`,
+};
+
 export const emailTemplates = {
   welcomeRegistration: (t: EmailT, clientName: string) => ({
     subject: t("welcomeSubject"),
-    html: layout(t, t("welcomeTitle"), t("welcomeBody", { name: clientName })),
+    html: layout(t, t("welcomeTitle"), t.markup("welcomeBody", { name: clientName, ...MARKUP_TAGS })),
   }),
   kycSubmittedConfirmation: (t: EmailT, clientName: string) => ({
     subject: t("kycSubmittedSubject"),
-    html: layout(t, t("kycSubmittedTitle"), t("kycSubmittedBody", { name: clientName })),
+    html: layout(t, t("kycSubmittedTitle"), t.markup("kycSubmittedBody", { name: clientName, ...MARKUP_TAGS })),
   }),
   depositSubmittedConfirmation: (t: EmailT, locale: Locale, clientName: string, amount: number) => ({
     subject: t("depositSubmittedSubject"),
     html: layout(
       t,
       t("depositSubmittedTitle"),
-      t("depositSubmittedBody", { name: clientName, amount: fmtUsd(amount, locale) })
+      t.markup("depositSubmittedBody", { name: clientName, amount: fmtUsd(amount, locale), ...MARKUP_TAGS })
     ),
   }),
   withdrawalSubmittedConfirmation: (t: EmailT, locale: Locale, clientName: string, amount: number) => ({
@@ -132,19 +145,23 @@ export const emailTemplates = {
     html: layout(
       t,
       t("withdrawalSubmittedTitle"),
-      t("withdrawalSubmittedBody", { name: clientName, amount: fmtUsd(amount, locale) })
+      t.markup("withdrawalSubmittedBody", { name: clientName, amount: fmtUsd(amount, locale), ...MARKUP_TAGS })
     ),
   }),
   depositApproved: (t: EmailT, locale: Locale, clientName: string, amount: number) => ({
     subject: t("depositApprovedSubject"),
-    html: layout(t, t("depositApprovedTitle"), t("depositApprovedBody", { name: clientName, amount: fmtUsd(amount, locale) })),
+    html: layout(
+      t,
+      t("depositApprovedTitle"),
+      t.markup("depositApprovedBody", { name: clientName, amount: fmtUsd(amount, locale), ...MARKUP_TAGS })
+    ),
   }),
   depositRejected: (t: EmailT, locale: Locale, clientName: string, amount: number, reason: string) => ({
     subject: t("depositRejectedSubject"),
     html: layout(
       t,
       t("depositRejectedTitle"),
-      t("depositRejectedBody", { name: clientName, amount: fmtUsd(amount, locale), reason })
+      t.markup("depositRejectedBody", { name: clientName, amount: fmtUsd(amount, locale), reason, ...MARKUP_TAGS })
     ),
   }),
   withdrawalSent: (t: EmailT, locale: Locale, clientName: string, amount: number, txHash: string) => ({
@@ -152,7 +169,7 @@ export const emailTemplates = {
     html: layout(
       t,
       t("withdrawalSentTitle"),
-      t("withdrawalSentBody", { name: clientName, amount: fmtUsd(amount, locale), txHash })
+      t.markup("withdrawalSentBody", { name: clientName, amount: fmtUsd(amount, locale), txHash, ...MARKUP_TAGS })
     ),
   }),
   withdrawalRejected: (t: EmailT, locale: Locale, clientName: string, amount: number, reason: string) => ({
@@ -160,23 +177,23 @@ export const emailTemplates = {
     html: layout(
       t,
       t("withdrawalRejectedTitle"),
-      t("withdrawalRejectedBody", { name: clientName, amount: fmtUsd(amount, locale), reason })
+      t.markup("withdrawalRejectedBody", { name: clientName, amount: fmtUsd(amount, locale), reason, ...MARKUP_TAGS })
     ),
   }),
   kycApproved: (t: EmailT, clientName: string) => ({
     subject: t("kycApprovedSubject"),
-    html: layout(t, t("kycApprovedTitle"), t("kycApprovedBody", { name: clientName })),
+    html: layout(t, t("kycApprovedTitle"), t.markup("kycApprovedBody", { name: clientName, ...MARKUP_TAGS })),
   }),
   kycRejected: (t: EmailT, clientName: string, reason: string) => ({
     subject: t("kycRejectedSubject"),
-    html: layout(t, t("kycRejectedTitle"), t("kycRejectedBody", { name: clientName, reason })),
+    html: layout(t, t("kycRejectedTitle"), t.markup("kycRejectedBody", { name: clientName, reason, ...MARKUP_TAGS })),
   }),
   managerNewDeposit: (t: EmailT, locale: Locale, clientName: string, amount: number) => ({
     subject: t("managerNewDepositSubject"),
     html: layout(
       t,
       t("managerNewDepositTitle"),
-      t("managerNewDepositBody", { name: clientName, amount: fmtUsd(amount, locale) })
+      t.markup("managerNewDepositBody", { name: clientName, amount: fmtUsd(amount, locale), ...MARKUP_TAGS })
     ),
   }),
   managerNewWithdrawal: (t: EmailT, locale: Locale, clientName: string, amount: number) => ({
@@ -184,7 +201,7 @@ export const emailTemplates = {
     html: layout(
       t,
       t("managerNewWithdrawalTitle"),
-      t("managerNewWithdrawalBody", { name: clientName, amount: fmtUsd(amount, locale) })
+      t.markup("managerNewWithdrawalBody", { name: clientName, amount: fmtUsd(amount, locale), ...MARKUP_TAGS })
     ),
   }),
   passwordReset: (t: EmailT, resetUrl: string) => ({
@@ -196,7 +213,8 @@ export const emailTemplates = {
     html: layout(
       t,
       t("managerNewKycTitle"),
-      t("managerNewKycBody", { name: clientName }) + (hasPhotos ? t("managerNewKycPhotosNote") : "")
+      t.markup("managerNewKycBody", { name: clientName, ...MARKUP_TAGS }) +
+        (hasPhotos ? t.markup("managerNewKycPhotosNote", { ...MARKUP_TAGS }) : "")
     ),
   }),
   weeklyPerformanceReport: (
@@ -213,12 +231,13 @@ export const emailTemplates = {
     // de réception interne (voir lib/client-messages.ts) : pas de style inline
     // fixé pour un fond clair, donc il hérite naturellement du thème sombre
     // de l'app plutôt que de jurer visuellement.
-    const bodyHtml = t("weeklyReportBody", {
+    const bodyHtml = t.markup("weeklyReportBody", {
       name: clientName,
       previousBalance: fmtUsd(previousBalance, locale),
       currentBalance: fmtUsd(currentBalance, locale),
       direction,
       changePct: Math.abs(changePct).toFixed(1),
+      ...MARKUP_TAGS,
     });
     return {
       subject: t("weeklyReportSubject"),

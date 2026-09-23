@@ -107,6 +107,7 @@
     "pendingDeposit": "+ {amount} pendiente de confirmación (depósito)",
     "pendingWithdrawal": "− {amount} en proceso de envío (retiro)",
     "inboxTitle": "Mis informes",
+    "downloadPdf": "Ver en PDF ↓",
     "balanceHistory": "Historial de mi saldo",
     "totalDeposited": "Total depositado:",
     "exportCsv": "Exportar como CSV ↓",

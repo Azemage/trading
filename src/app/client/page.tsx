@@ -111,6 +111,9 @@ export default async function ClientView() {
                   <span className="text-xs text-muted whitespace-nowrap">{fmtDateTime(m.createdAt, loc)}</span>
                 </div>
                 <div className="text-sm" dangerouslySetInnerHTML={{ __html: m.bodyHtml }} />
+                <a href={`/client/reports/${m.id}/pdf`} target="_blank" rel="noopener" className="text-xs text-green">
+                  {t("downloadPdf")}
+                </a>
               </div>
             ))}
           </div>
